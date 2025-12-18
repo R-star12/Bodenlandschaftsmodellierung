@@ -1,0 +1,36 @@
+DER PLAN
+
+Was wir in der PPT vorstellen sollen: Introduction, Histograms (soil property distribution), Correlation analysis (soil propertys vs covariates), Accuracy assessment, Variable importance, 
+
+
+- 2 Modelle: RF + Regression Kriging UND Lineare Regression
+
+Vorgehensweise
+- Überblick über Daten bekommen (summarys + Plots)
+- 2 Modelle durchrechnen
+
+
+
+To-Dos
+- Shape Dateien in CSV umwandeln
+- Daten in R laden (Ziel: Stack für Covariate UND Dataframe mit Messpunkten, deren Koordinaten + spezifische Werte für Kovariaten) # Emil
+- Korrelationsanalyse (Bodeneigenschaften vs. Kovariate)
+- 2 Modelle erstellen (versch. Parameter ausprobieren)
+- Genauigkeitsanalysen (e.g. CV metrics, RSME, MAE, R2, ...)
+- Variable importance berechnen
+- Bodenkarten erstellen 
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
