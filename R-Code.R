@@ -1,17 +1,38 @@
-# hii :)
-# load library
+###############################################################################
+##     Practical exam: DSM - Annalena Bauer, Carla Schenk, Emil Unkrig       ##
+###############################################################################
+
+# empty workspace
+rm(list = ls())
+
+# check directory
+getwd()
+
+# loading libraries
 library(sp)
-library(raster)
 library(sf)
 library(caret)
+library(ggplot2)
+library(mapview)
+library(corrplot)
+library(rpart)
+library(rpart.plot)
+library(sp)
+library(gstat)
+library(raster)
+library(gridExtra)
 library(randomForest)
-library (ggplot2)
 
 ########################### DATA PREPROCESSING ###############################
 
+
+
 # Covariablen reinladen --> zu einem Stack hochladen; funktioniert nur wenn gleicher Ausschnitt & gleiche Auflösung
-covariates_RS <- stack(list.files("./cov/", pattern="\\.tif$", full.names = TRUE))
+covariates_RS <- raster::stack(list.files("./Covariates/", pattern="\\.tif$", full.names = TRUE))
 names(covariates_RS) 
+
+files <- list.files("./Covariates/", pattern="\\.tif$", full.names = TRUE)
+basename(files)
 
 # import the point soil data from desktop --> X & Y koordinaten von shp-file an diese CSV anfügen
 point <- read.csv ("soil.csv", header = TRUE)
