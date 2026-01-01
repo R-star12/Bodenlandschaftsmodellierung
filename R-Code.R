@@ -10,51 +10,43 @@ getwd()
 
 # loading libraries
 library(sp)
+library(raster)
 library(sf)
 library(caret)
-library(ggplot2)
-library(mapview)
-library(corrplot)
-library(rpart)
-library(rpart.plot)
-library(sp)
-library(gstat)
-library(raster)
-library(gridExtra)
 library(randomForest)
+library (ggplot2)
 
 ########################### DATA PREPROCESSING ###############################
 
+# Kovariablen laden, benennen (automatische Benennung hat nicht geklappt) & Koordinatensystem zuweisen
+covariates_RS <- stack(list.files("./Covariates/", pattern="\\.tif$", full.names = TRUE))
+
+names(covariates_RS) <- c("Aspect", "Blue", "Catchment_Area", "Channel_Network", "Elevation", "Green", "LS_Factor", "NDVI", 
+                          "NIR", "Rainfall", "Red", "Slope", "SWIR1", "SWIR2", "Temperature", "Valley_Depth", "Wetness_Index")
+crs(covariates_RS) <- "EPSG:4326"
+
+# Import der Grenzen des Untersuchungsgebiets
+study_area <- as(st_read("./GIS/boundary.shp"), "Spatial")
+plot(study_area, main = "Untersuchungsgebiet")
+
+# Import der .csv SOIL Daten & Umwandlung in räumliche Daten (Koordinaten + Koordinatensystem)
+soil_csv <- read.csv("./Soil/soil.csv", header = TRUE)
+coordinates(soil_csv) <- ~ x + y
+proj4string(soil_csv) <- CRS("+init=epsg:4326")
+
+head(soil_csv)
+plot(soil_csv, add =T, pch = 18, col ="red")
 
 
-# Covariablen reinladen --> zu einem Stack hochladen; funktioniert nur wenn gleicher Ausschnitt & gleiche Auflösung
-covariates_RS <- raster::stack(list.files("./Covariates/", pattern="\\.tif$", full.names = TRUE))
-names(covariates_RS) 
+# Extraktion der Kovariaten an den Messpunkten 
+cov = extract(covariates_RS, soil_csv, method='bilinear', df=TRUE)
 
-files <- list.files("./Covariates/", pattern="\\.tif$", full.names = TRUE)
-basename(files)
+# Kombination der Kovariate mit der CEC (Zielvariable)
+cov_soil = cbind(cov[,-1], CEC=soil_csv$CEC)
 
-# import the point soil data from desktop --> X & Y koordinaten von shp-file an diese CSV anfügen
-point <- read.csv ("soil.csv", header = TRUE)
+str(cov_soil)
 
-# convert soil point data to spatial point data  
-coordinates(point) <- ~ x + y
 
-# set projection
-proj4string(point) <- CRS("+init=epsg:32639")
-
-# plot the point on the raster
-plot(covariates$Nir, main = "Landsat Image + Sample Points")
-plot(point, add =T, pch = 19)
-
-# extract covariate values at each point of observation 
-cov = extract(covariates, point, method='bilinear', df=TRUE)
-
-# combining covariates and soil properties
-cov_soil = cbind(cov[,-1], ec=point$ec)
-
-# remove na values
-cov_soil <- cov_soil[complete.cases(cov_soil),]
 
 ###################### DESCRIPTIVE STATISTICS ###############################
 
