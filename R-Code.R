@@ -50,6 +50,13 @@ str(cov_soil)
 
 ###################### DESCRIPTIVE STATISTICS ###############################
 
+plot(cov_soil$CEC, cov_soil$NDVI)
+plot(cov_soil$CEC)
+hist(cov_soil$CEC)
+
+plot(cov_soil$CEC, cov_soil$Elevation)
+plot(cov_soil$Temperature)
+
 ## Korrelationsanalyse 
 ## Histogramme 
 
