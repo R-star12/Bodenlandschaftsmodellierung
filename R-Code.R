@@ -50,21 +50,71 @@ str(cov_soil)
 
 ###################### DESCRIPTIVE STATISTICS ############################### #ANNALENA
 
-plot(cov_soil$CEC, cov_soil$NDVI)
-plot(cov_soil$CEC)
-hist(cov_soil$CEC)
+summary(cov_soil$CEC)
 
-plot(cov_soil$CEC, cov_soil$Elevation)
-plot(cov_soil$Temperature)
 
-## Korrelationsanalyse 
+############## Histogramme ###########
 
-library(ggcorrplot)
+library(ggplot2)
 
-# check the correlation between EC and covariates
-ggcorrplot(cor(cov_soil), hc.order = TRUE, type = "lower", lab = TRUE)
+ggplot(cov_soil, aes(x = CEC)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Histogramm der CEC-Werte",
+       x = "CEC",
+       y = "Häufigkeit")
 
-## Histogramme 
+ggplot(cov_soil, aes(y = CEC)) +
+  geom_boxplot(fill = "orange") +
+  theme_minimal() +
+  labs(title = "Boxplot der CEC-Werte",
+       y = "CEC")
+
+library(tidyr)
+
+cov_long <- pivot_longer(
+  cov_soil,
+  cols = everything(),
+  names_to = "Variable",
+  values_to = "Value"
+)
+
+ggplot(cov_long, aes(x = Value)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  facet_wrap(~ Variable, scales = "free") +
+  theme_minimal() +
+  labs(title = "Verteilung aller Variablen",
+       x = "Wert",
+       y = "Häufigkeit")
+
+ggplot(cov_long, aes(x = Variable, y = Value)) +
+  geom_boxplot(fill = "orange") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Boxplots aller Variablen",
+       x = "",
+       y = "Wert")
+
+
+ggplot(cov_long, aes(x = Value)) +
+  geom_density(fill = "skyblue", alpha = 0.6) +
+  facet_wrap(~ Variable, scales = "free") +
+  theme_minimal() +
+  labs(title = "Dichteverteilungen aller Variablen")
+
+
+############# Korrelation #######
+
+cor_matrix <- cor(cov_soil, use = "complete.obs", method = "pearson")
+round(cor_matrix, 2)
+
+library(corrplot)
+
+corrplot(cor_matrix,
+         method = "color",
+         type = "upper",
+         tl.cex = 0.7,
+         number.cex = 0.6)
 
 
 ####################### MODEL ########################################
