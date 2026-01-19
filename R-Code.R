@@ -116,10 +116,49 @@ corrplot(cor_matrix,
          tl.cex = 0.7,
          number.cex = 0.6)
 
+#### signifikanz der korrelationen (p-wert)
+cor_test_results <- lapply(names(cov_soil)[-ncol(cov_soil)], function(var) {
+  test <- cor.test(cov_soil[[var]], cov_soil$CEC, method = "pearson")
+  data.frame(
+    Variable = var,
+    Correlation = test$estimate,
+    p_value = test$p.value
+  )
+})
+
+cor_test_results <- do.call(rbind, cor_test_results)
+cor_test_results ### bedeutet: Aspect, NIR, LS_Factor ist signifikant korreliert mit CEC
+
+
+###scatterplot 
+ggplot(cov_soil, aes(x = NDVI, y = CEC)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  theme_minimal()
 
 ####################### MODEL ########################################
 
-#Lineare Regression # ANNALENA
+#######################Lineare Regression ############## ANNA-LENA
+
+## einfaches lineares Model
+lm_full <- lm(CEC ~ ., data = cov_soil)
+summary(lm_full)
+
+## Multikollinearität checken --> VIF über 5 problematisch, über 10 schlecht
+library(car)
+vif(lm_full)
+
+## anhand analyse auszuschließen: Blue, Channel Network, Elevation, green, NDVI, NIR, Red, Slope, SWIR1+2, Temperature
+
+
+##reduzierte Model
+lm_red <- lm(CEC ~ NDVI + Wetness_Index + Elevation, data = cov_soil)
+summary(lm_red)
+
+par(mfrow = c(2, 2))
+plot(lm_red)
+par(mfrow = c(1, 1))
+
 
 #Random Forest mit Regression Kriging #EMIL
 
