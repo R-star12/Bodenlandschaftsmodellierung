@@ -110,11 +110,31 @@ round(cor_matrix, 2)
 
 library(corrplot)
 
+## nur mit CEC korreliert
+corrplot(matrix(cor_CEC, ncol = 1),
+         is.corr = FALSE,
+         tl.cex = 0.8)
+### korr plot volltändig
 corrplot(cor_matrix,
          method = "color",
          type = "upper",
          tl.cex = 0.7,
          number.cex = 0.6)
+
+### korr plot vollständig verbessert
+cor_mat <- cor(cov_soil, use = "complete.obs", method = "pearson")
+
+corrplot(
+  cor_mat,
+  method = "color",
+  type = "upper",
+  order = "hclust",
+  tl.col = "black",
+  tl.cex = 0.7,
+  addCoef.col = "black",
+  number.cex = 0.6
+)
+
 
 #### signifikanz der korrelationen (p-wert)
 cor_test_results <- lapply(names(cov_soil)[-ncol(cov_soil)], function(var) {
