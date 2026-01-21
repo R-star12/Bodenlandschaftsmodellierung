@@ -103,6 +103,9 @@ ggplot(cov_long, aes(x = Value)) +
   labs(title = "Dichteverteilungen aller Variablen")
 
 
+
+
+
 ############# Korrelation #######
 
 cor_matrix <- cor(cov_soil, use = "complete.obs", method = "pearson")
@@ -156,13 +159,77 @@ ggplot(cov_soil, aes(x = NDVI, y = CEC)) +
   geom_smooth(method = "lm", se = FALSE, color = "red") +
   theme_minimal()
 
+
+
+library(ggplot2)
+library(tidyr)
+
+# Daten ins Long-Format bringen (alle Variablen außer CEC)
+cov_long <- pivot_longer(
+  cov_soil,
+  cols = -CEC,
+  names_to = "Variable",
+  values_to = "Value"
+)
+
+# Scatterplots: CEC vs jede Variable
+ggplot(cov_long, aes(x = Value, y = CEC)) +
+  geom_point(alpha = 0.6, size = 1) +
+  geom_smooth(method = "loess", se = FALSE, color = "red") +
+  facet_wrap(~ Variable, scales = "free_x") +
+  theme_minimal() +
+  labs(
+    title = "Scatterplots von CEC mit allen Kovariaten",
+    x = "Kovariate",
+    y = "CEC"
+  )
+
+
+
+
 ####################### MODEL ########################################
 
 #######################Lineare Regression ############## ANNA-LENA
 
 ## einfaches lineares Model
 lm_full <- lm(CEC ~ ., data = cov_soil)
-summary(lm_full)
+lm_full_1 <- lm(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index,
+                 data=cov_soil)
+summary(lm_full_1)
+
+# apply the linear model on testing data
+CEC_linear_Pred <- predict(lm_full_1, cov_soil)  
+
+# check the plot actual and predicted OC values
+plot(cov_soil$CEC, CEC_linear_Pred, main="Linear model", 
+     col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
+     xlim=c(0,100),ylim=c(0,100))
+abline(coef = c(0,1),  col="red" )
+
+# calculate correlation
+cor_linear <- cor(cov_soil$CEC, CEC_linear_Pred)
+cor_linear
+
+# calculate RMSE
+RMSE_linear <- sqrt(mean((cov_soil$CEC - CEC_linear_Pred)^2))
+RMSE_linear
+
+################### reduziertes, einfaches lineare Regression #######
+lm_reduced <- lm(
+  CEC ~ NDVI + Catchment_Area + Slope + LS_Factor + Valley_Depth,
+  data = cov_soil
+)
+
+summary(lm_reduced)
+
+# apply the linear model on testing data
+CEC_linear_Pred <- predict(lm_reduced, cov_soil)  
+
+# check the plot actual and predicted OC values
+plot(cov_soil$CEC, CEC_linear_Pred, main="Linear model", 
+     col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
+     xlim=c(0,100),ylim=c(0,100))
+abline(coef = c(0,1),  col="red" )
 
 ## Multikollinearität checken --> VIF über 5 problematisch, über 10 schlecht
 library(car)
@@ -180,6 +247,49 @@ plot(lm_red)
 par(mfrow = c(1, 1))
 
 
+##### VIF #######
+predictors <- cov_soil[, -which(names(cov_soil) == "CEC")]
+
+R2_values <- sapply(names(predictors), function(v) {
+  others <- predictors[, names(predictors) != v]
+  summary(lm(predictors[[v]] ~ ., data = others))$r.squared
+})
+
+VIF_like <- 1 / (1 - R2_values)
+sort(VIF_like, decreasing = TRUE)
+
+
+################## GAM - BESSERES MODELL ############################
+
+library(nlme)
+library(mgcv)
+
+gam_cec <- gam(
+  CEC ~ 
+    s(NDVI, k = 6) +
+    s(Catchment_Area, k = 6) +
+    s(Slope, k = 6) +
+    s(LS_Factor, k = 6) +
+    s(Valley_Depth, k = 6),
+  data = cov_soil,
+  method = "REML"
+)
+
+summary(gam_cec)
+
+gam.check(gam_cec)
+
+par(mfrow = c(2, 3))
+plot(gam_cec, shade = TRUE, pages = 1, seWithMean = TRUE)
+par(mfrow = c(1, 1))
+
+CEC_GAM_Pred <- predict(gam_cec, cov_soil)  
+plot(cov_soil$CEC, CEC_GAM_Pred, main="GAM", 
+     col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
+     xlim=c(0,100),ylim=c(0,100))
+abline(coef = c(0,1),  col="red" )
+
+
 #Random Forest mit Regression Kriging #EMIL
 
 # Erstellen eines neuen Datensatzes zum üben
@@ -190,6 +300,7 @@ cov_soilA <- cov_soil
 # fit random forest model
 
 rf_fit <- randomForest(CEC ~ ., data = cov_soilA, ntree = 1000)
+summary(rf_fit)
 
 # random forest prediction part 
 map_rf <- raster::predict(covariates_RS, rf_fit)
@@ -213,6 +324,7 @@ coordinates(cov_soilA) <- ~ x + y
 proj4string(cov_soilA) <- CRS("+proj=utm +zone=39 +datum=WGS84 +units=m +no_defs")
 
 # compute experimental semivariogram of residuals
+install.packages(gstat)
 library(gstat)
 
 gstat_res <- gstat(formula = residuals ~ 1, data = cov_soilA)
