@@ -290,6 +290,11 @@ plot(cov_soil$CEC, CEC_GAM_Pred, main="GAM",
 abline(coef = c(0,1),  col="red" )
 
 
+
+
+
+
+
 #Random Forest mit Regression Kriging #EMIL
 
 # Erstellen eines neuen Datensatzes zum üben
@@ -380,5 +385,57 @@ spplot(RK_map, main = "CEC map based on RK model")
 #CV metrics; RMSE/MAE/R² #CARLA
 
 #Variable Importance #CARLA
+
+
+### Modellgüte RF #######
+obs <- cov_soilA$CEC
+pred_rf <- rf_fit$predicted
+
+RMSE_rf <- sqrt(mean((obs - pred_rf)^2))
+MAE_rf  <- mean(abs(obs - pred_rf))
+R2_rf   <- cor(obs, pred_rf)^2
+
+RMSE_rf
+MAE_rf
+R2_rf
+
+####### Modellgute RK #######
+
+##residuen an punktstandorten
+
+install.packages("gstat")
+library(gstat)
+
+#### convert to spatial data
+
+cov_soilA$x <- soil_csv$x
+cov_soilA$y <- soil_csv$y
+
+cov_soil_sp <- cov_soilA
+
+coordinates(cov_soil_sp) <- ~ x + y
+proj4string(cov_soil_sp) <- CRS("+init=epsg:4326")
+
+class(cov_soil_sp)
+
+
+rk_cv <- krige.cv(
+  residuals ~ 1,
+  locations = cov_soil_sp,
+  model     = vg_model_res,
+  nfold     = nrow(cov_soil_sp)
+)
+
+#RK-vorhersage an punktstandorten
+pred_rk_cv <- rf_fit$predicted + rk_cv$var1.pred
+
+#güte
+RMSE_rk <- sqrt(mean((obs - pred_rk_cv)^2))
+R2_rk   <- cor(obs, pred_rk_cv)^2
+RMSE_rk
+R2_rk
+
+
+
 
 
