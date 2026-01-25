@@ -214,6 +214,10 @@ cor_linear
 RMSE_linear <- sqrt(mean((cov_soil$CEC - CEC_linear_Pred)^2))
 RMSE_linear
 
+#calculate MAE
+MAE_linear <- mean(abs(cov_soil$CEC - CEC_linear_Pred))
+MAE_linear
+
 ################### reduziertes, einfaches lineare Regression #######
 lm_reduced <- lm(
   CEC ~ NDVI + Catchment_Area + Slope + LS_Factor + Valley_Depth,
@@ -302,6 +306,23 @@ cov_soilA <- cov_soil
 rf_fit <- randomForest(CEC ~ ., data = cov_soilA, ntree = 1000)
 summary(rf_fit)
 
+# variable importance
+importance(rf_fit)
+varImpPlot(rf_fit, main = "Variable Importance for RF model")
+
+# rf prediction
+rf_pred <- rf_fit$predicted
+
+# rf performance 
+RMSE_RF <- sqrt(mean((cov_soilA$CEC - rf_pred)^2))
+RMSE_RF
+
+MAE_RF <- mean(abs(cov_soilA$CEC - rf_pred))
+MAE_RF
+
+R2_RF <- 1 - sum((cov_soilA$CEC - rf_pred)^2)/sum((cov_soilA$CEC - mean(cov_soilA$CEC))^2)
+R2_RF
+
 # random forest prediction part 
 map_rf <- raster::predict(covariates_RS, rf_fit)
 
@@ -366,6 +387,18 @@ spplot(res_krig, zcol = "var1.pred", main = "residuals predictions")
 res_krig_raster <- raster::resample(raster(res_krig), map_rf)
 
 RK_map <-     res_krig_raster +  map_rf ##evtl. umdrehen!?
+
+# rk performance 
+RK_pred <- extract(RK_map, cov_soilA)
+
+RMSE_RK <- sqrt(mean((cov_soilA$CEC - RK_pred)^2))
+RMSE_RK
+
+MAE_RK <- mean(abs(cov_soilA$CEC - RK_pred))
+MAE_RK
+
+R2_RK <- 1 - sum((cov_soilA$CEC - RK_pred)^2) / sum((cov_soilA$CEC - mean(cov_soilA$CEC))^2)
+R2_RK
 
 # plot the RK map
 spplot(RK_map, main = "CEC map based on RK model")
