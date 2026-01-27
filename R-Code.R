@@ -117,10 +117,7 @@ round(cor_matrix, 2)
 
 library(corrplot)
 
-## nur mit CEC korreliert
-corrplot(matrix(cor_CEC, ncol = 1),
-         is.corr = FALSE,
-         tl.cex = 0.8)
+
 ### korr plot volltändig
 corrplot(cor_matrix,
          method = "color",
@@ -211,10 +208,11 @@ ggplot(cov_long, aes(x = Value, y = CEC)) +
 #######################Lineare Regression ############## ANNA-LENA
 
 ## einfaches lineares Model
-lm_full <- lm(CEC ~ ., data = cov_soil)
-lm_full_1 <- lm(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index,
+lm_full <- lm(CEC ~ ., data = cov_soil_scaled)
+lm_full_1 <- lm(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temprature+Valley_Depth+Wetness_Index,
                  data=cov_soil)
 summary(lm_full_1)
+summary(lm_full)
 
 # apply the linear model on testing data
 CEC_linear_Pred <- predict(lm_full_1, cov_soil)  
@@ -240,18 +238,18 @@ MAE_linear
 ################### reduziertes, einfaches lineare Regression #######
 lm_reduced <- lm(
   CEC ~ NDVI + Catchment_Area + Slope + LS_Factor + Valley_Depth,
-  data = cov_soil
+  data = cov_soil_scaled
 )
 
 summary(lm_reduced)
 
 # apply the linear model on testing data
-CEC_linear_Pred <- predict(lm_reduced, cov_soil)  
+CEC_linear_Pred <- predict(lm_reduced, cov_soil_scaled)  
 
 # check the plot actual and predicted OC values
-plot(cov_soil$CEC, CEC_linear_Pred, main="Linear model", 
+plot(cov_soil_scaled$CEC, CEC_linear_Pred, main="Linear model", 
      col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
-     xlim=c(0,100),ylim=c(0,100))
+     xlim=c(0,1),ylim=c(0,1))
 abline(coef = c(0,1),  col="red" )
 
 ## Multikollinearität checken --> VIF über 5 problematisch, über 10 schlecht
