@@ -5,6 +5,7 @@
 # empty workspace
 rm(list = ls())
 
+
 # check directory
 getwd()
 
@@ -20,13 +21,15 @@ library (ggplot2)
 
 # Kovariablen laden, benennen (automatische Benennung hat nicht geklappt) & Koordinatensystem zuweisen
 covariates_RS <- stack(list.files("./Covariates/", pattern="\\.tif$", full.names = TRUE))
+names(covariates_RS) <- tools::file_path_sans_ext(
+  basename(list.files("./Covariates/", pattern="\\.tif$", full.names = FALSE)))
 
-names(covariates_RS) <- c("Aspect", "Blue", "Catchment_Area", "Channel_Network", "Elevation", "Green", "LS_Factor", "NDVI", 
-                          "NIR", "Rainfall", "Red", "Slope", "SWIR1", "SWIR2", "Temperature", "Valley_Depth", "Wetness_Index")
-crs(covariates_RS) <- "EPSG:4326"
+names(covariates_RS)
+covariates_RS  <- projectRaster(covariates_RS, crs = CRS("+init=epsg:4326"))
 
 # Import der Grenzen des Untersuchungsgebiets
 study_area <- as(st_read("./GIS/boundary.shp"), "Spatial")
+study_area     <- spTransform(study_area, CRS("+init=epsg:4326"))
 plot(study_area, main = "Untersuchungsgebiet")
 
 # Import der .csv SOIL Daten & Umwandlung in räumliche Daten (Koordinaten + Koordinatensystem)
@@ -48,7 +51,8 @@ str(cov_soil)
 
 
 
-###################### DESCRIPTIVE STATISTICS ############################### #ANNALENA
+###################### DESCRIPTIVE STATISTICS ############################### 
+#ANNALENA
 
 summary(cov_soil$CEC)
 
@@ -139,18 +143,33 @@ corrplot(
 )
 
 
-#### signifikanz der korrelationen (p-wert)
-cor_test_results <- lapply(names(cov_soil)[-ncol(cov_soil)], function(var) {
-  test <- cor.test(cov_soil[[var]], cov_soil$CEC, method = "pearson")
-  data.frame(
-    Variable = var,
-    Correlation = test$estimate,
-    p_value = test$p.value
-  )
-})
 
-cor_test_results <- do.call(rbind, cor_test_results)
-cor_test_results ### bedeutet: Aspect, NIR, LS_Factor ist signifikant korreliert mit CEC
+#korrelation mit standardisierten werten
+cov_soil_scaled <- as.data.frame(scale(cov_soil))
+cor_matrix_scaled <- cor(
+  cov_soil_scaled,
+  use = "complete.obs",
+  method = "pearson"
+)
+
+
+round(cor_matrix_scaled, 2)
+
+
+corrplot(
+  cor_matrix_scaled,
+  method = "color",
+  type = "upper",
+  order = "hclust",
+  tl.col = "black",
+  tl.cex = 0.7,
+  addCoef.col = "black",
+  number.cex = 0.6
+)
+
+
+
+#### Scatterplots ################
 
 
 ###scatterplot 
@@ -294,38 +313,73 @@ plot(cov_soil$CEC, CEC_GAM_Pred, main="GAM",
 abline(coef = c(0,1),  col="red" )
 
 
+<<<<<<< HEAD
 
 
 
 
 
 #Random Forest mit Regression Kriging #EMIL
+=======
+# calculate correlation
+cor_GAM <- cor(cov_soil$CEC, CEC_GAM_Pred)
+cor_GAM
+>>>>>>> 0a76d071157e8e2762e88e3132a0aafff97d154c
 
-# Erstellen eines neuen Datensatzes zum üben
 
-cov_soilA <- cov_soil
 
+
+############################### Random Forest ###########################
+
+#Random Forest  #EMIL
+
+# split the data to training (80%) and testing (20%) sets
+trainIndex <- createDataPartition(cov_soil$CEC, p = 0.8, list = FALSE, times = 1)
+
+# subset the datasets
+cov_soil_Train <- cov_soil[ trainIndex,]
+cov_soil_Test  <- cov_soil[-trainIndex,]
+
+# inspect the two datasets
+str(cov_soil_Train)
+str(cov_soil_Test)
 
 # fit random forest model
+rf_fit <- randomForest(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temprature+Valley_Depth+Wetness_Index, 
+                       data = cov_soil_Train, ntree = 1000, do.trace = 50) #Cor: 1.7
 
-rf_fit <- randomForest(CEC ~ ., data = cov_soilA, ntree = 1000)
+
+rf_fit <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temprature+LS_Factor+NDVI+NIR+Rainfall+Slope+SWIR1+Wetness_Index, 
+                       data = cov_soil_Train, ntree = 10000) #Cor: 2.1
+
+
 summary(rf_fit)
 
 # variable importance
 importance(rf_fit)
 varImpPlot(rf_fit, main = "Variable Importance for RF model")
 
-# rf prediction
-rf_pred <- rf_fit$predicted
+CEC_rf_Pred <- predict(rf_fit, cov_soil_Test)
+
+
+# check the plot actual and predicted OC values
+plot(cov_soil_Test$CEC, CEC_rf_Pred, main="Tree model", 
+     col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,100),ylim=c(0,100))
+
+abline(coef = c(0,1),  col="red" )
+
+# calculate correlation
+cor_rf <- cor(cov_soil_Test$CEC, CEC_rf_Pred)
+cor_rf
 
 # rf performance 
-RMSE_RF <- sqrt(mean((cov_soilA$CEC - rf_pred)^2))
+RMSE_RF <- sqrt(mean((cov_soil_Test$CEC - CEC_rf_Pred)^2))
 RMSE_RF
 
-MAE_RF <- mean(abs(cov_soilA$CEC - rf_pred))
+MAE_RF <- mean(abs(cov_soil_Test$CEC - CEC_rf_Pred))
 MAE_RF
 
-R2_RF <- 1 - sum((cov_soilA$CEC - rf_pred)^2)/sum((cov_soilA$CEC - mean(cov_soilA$CEC))^2)
+R2_RF <- 1 - sum((cov_soil_Test$CEC - CEC_rf_Pred)^2)/sum((cov_soil_Test$CEC - mean(cov_soil_Test$CEC))^2)
 R2_RF
 
 # random forest prediction part 
@@ -336,29 +390,29 @@ spplot(map_rf, main = "CEC map based on RF model")
 
 
 # append residuals
-cov_soilA$residuals <- cov_soilA$CEC - rf_fit$predicted
-names(cov_soilA)
-summary(cov_soilA)
+cov_soil$residuals <- cov_soil$CEC - CEC_rf_Pred
+names(cov_soil)
+summary(cov_soil)
 
 # histogram of the residuals 
-hist(cov_soilA$residuals, col = "lightblue")
+hist(cov_soil$residuals, col = "lightblue")
 
 # convert cov_soil to spatial data
-cov_soilA$x <- soil_csv$x
-cov_soilA$y <- soil_csv$y
-coordinates(cov_soilA) <- ~ x + y
-proj4string(cov_soilA) <- CRS("+proj=utm +zone=39 +datum=WGS84 +units=m +no_defs")
+cov_soil$x <- soil_csv$x
+cov_soil$y <- soil_csv$y
+coordinates(cov_soil) <- ~ x + y
+proj4string(cov_soil) <- CRS("+init=epsg:4326")
 
 # compute experimental semivariogram of residuals
-install.packages(gstat)
+#install.packages(gstat)
 library(gstat)
 
-gstat_res <- gstat(formula = residuals ~ 1, data = cov_soilA)
+gstat_res <- gstat(formula = residuals ~ 1, data = cov_soil)
 vg_res    <- variogram(gstat_res)
 plot(vg_res, plot.nu = FALSE)
 
 # define initial semivariogram model
-vg_parameters_res <- vgm(nugget = 70, psill = 100, range = 1.5, model = "Pen")
+vg_parameters_res <- vgm(nugget = 70, psill = 100, range = 100, model = "Pen")
 plot(vg_res, vg_parameters_res)
 
 # fit semivariogram model
@@ -368,23 +422,24 @@ vg_model_res
 
 
 # export boundary as a grid (approx. 90 m) 
-res(covariates_RS) #Rastergröße etwa 1 km + 1 km
-r_template <- raster(study_area, res = 0.009)                 # template raster
+res(covariates_RS) 
+r_template <- raster(study_area, res = 0.00898)                 # template raster
 r_mask     <- rasterize(study_area, r_template, field = 1) # inside polygon = 1, outside = NA
 study_area_grid <- as(r_mask, "SpatialPixelsDataFrame")    # grid for kriging
 
-crs(cov_soilA) <- "EPSG:4326"
 
 # ordinary kriging of residuals
 res_krig <- krige(
   formula   = residuals ~ 1,
-  locations = cov_soilA,
+  locations = cov_soil,
   newdata   = study_area_grid,
   model     = vg_model_res
 )
 
 # plot the residuals map
+
 spplot(res_krig, zcol = "var1.pred", main = "residuals predictions")
+
 
 
 
@@ -394,20 +449,20 @@ res_krig_raster <- raster::resample(raster(res_krig), map_rf)
 RK_map <-     res_krig_raster +  map_rf ##evtl. umdrehen!?
 
 # rk performance 
-RK_pred <- extract(RK_map, cov_soilA)
+RK_pred <- extract(RK_map, cov_soil)
 
-RMSE_RK <- sqrt(mean((cov_soilA$CEC - RK_pred)^2))
+RMSE_RK <- sqrt(mean((cov_soil$CEC - RK_pred)^2))
 RMSE_RK
 
-MAE_RK <- mean(abs(cov_soilA$CEC - RK_pred))
+MAE_RK <- mean(abs(cov_soil$CEC - RK_pred))
 MAE_RK
 
-R2_RK <- 1 - sum((cov_soilA$CEC - RK_pred)^2) / sum((cov_soilA$CEC - mean(cov_soilA$CEC))^2)
+R2_RK <- 1 - sum((cov_soil$CEC - RK_pred)^2) / sum((cov_soil$CEC - mean(cov_soil$CEC))^2)
 R2_RK
 
 # plot the RK map
+spplot(map_rf, main = "CEC map based on RF model")
 spplot(RK_map, main = "CEC map based on RK model")
-
 
 
 
