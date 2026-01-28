@@ -20,6 +20,7 @@ library (ggplot2)
 ########################### DATA PREPROCESSING ###############################
 
 # Kovariablen laden, benennen (automatische Benennung hat nicht geklappt) & Koordinatensystem zuweisen
+
 covariates_RS <- stack(list.files("./Covariates/", pattern="\\.tif$", full.names = TRUE))
 names(covariates_RS) <- tools::file_path_sans_ext(
   basename(list.files("./Covariates/", pattern="\\.tif$", full.names = FALSE)))
@@ -27,10 +28,13 @@ names(covariates_RS) <- tools::file_path_sans_ext(
 names(covariates_RS)
 covariates_RS  <- projectRaster(covariates_RS, crs = CRS("+init=epsg:4326"))
 
+plot(covariates_RS)
+
+
 # Import der Grenzen des Untersuchungsgebiets
 study_area <- as(st_read("./GIS/boundary.shp"), "Spatial")
 study_area     <- spTransform(study_area, CRS("+init=epsg:4326"))
-plot(study_area, main = "Untersuchungsgebiet")
+
 
 # Import der .csv SOIL Daten & Umwandlung in räumliche Daten (Koordinaten + Koordinatensystem)
 soil_csv <- read.csv("./Soil/soil.csv", header = TRUE)
@@ -38,8 +42,12 @@ coordinates(soil_csv) <- ~ x + y
 proj4string(soil_csv) <- CRS("+init=epsg:4326")
 
 head(soil_csv)
-plot(soil_csv, add =T, pch = 18, col ="red")
 
+png("plots/NDVI_Messpunkte_Boundaries_plot.png", width = 800, height = 600) 
+plot(covariates_RS$NDVI, main = "NDVI")
+plot(study_area, add = T)
+plot(soil_csv, pch = 19, add = T, col ="blue")
+dev.off()
 
 # Extraktion der Kovariaten an den Messpunkten 
 cov = extract(covariates_RS, soil_csv, method='bilinear', df=TRUE)
@@ -332,6 +340,9 @@ cor_GAM
 #Random Forest  #EMIL
 
 # split the data to training (80%) and testing (20%) sets
+
+#cov_soil <- cov_soil[cov_soil$CEC<45,] #Test!
+
 trainIndex <- createDataPartition(cov_soil$CEC, p = 0.8, list = FALSE, times = 1)
 
 # subset the datasets
@@ -343,11 +354,14 @@ str(cov_soil_Train)
 str(cov_soil_Test)
 
 # fit random forest model
-rf_fit <- randomForest(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temprature+Valley_Depth+Wetness_Index, 
+
+
+
+rf_fit <- randomForest(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index, 
                        data = cov_soil_Train, ntree = 1000, do.trace = 50) #Cor: 1.7
 
 
-rf_fit <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temprature+LS_Factor+NDVI+NIR+Rainfall+Slope+SWIR1+Wetness_Index, 
+rf_fit <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temperature+LS_Factor+NDVI+NIR+Rainfall+Slope+SWIR1+Wetness_Index, 
                        data = cov_soil_Train, ntree = 10000) #Cor: 2.1
 
 
