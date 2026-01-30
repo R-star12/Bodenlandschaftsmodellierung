@@ -50,7 +50,7 @@ plot(soil_csv, pch = 19, add = T, col ="blue")
 dev.off()
 
 # Extraktion der Kovariaten an den Messpunkten 
-cov = extract(covariates_RS, soil_csv, method='bilinear', df=TRUE)
+cov = raster::extract(covariates_RS, soil_csv, method='bilinear', df=TRUE)
 
 # Kombination der Kovariate mit der CEC (Zielvariable)
 cov_soil = cbind(cov[,-1], CEC=soil_csv$CEC, Clay = soil_csv$Clay, SOC = soil_csv$SOC, pH = soil_csv$pH)
@@ -355,13 +355,11 @@ str(cov_soil_Test)
 
 # fit random forest model
 
-
-
 rf_fit <- randomForest(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index, 
                        data = cov_soil_Train, ntree = 1000, do.trace = 50) #Cor: 1.7
 
 
-rf_fit <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temperature+LS_Factor+NDVI+NIR+Rainfall+Slope+SWIR1+Wetness_Index, 
+rf_fit <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temperature+LS_Factor+NDVI+Rainfall+Slope+SWIR1+Wetness_Index, 
                        data = cov_soil_Train, ntree = 10000) #Cor: 2.1
 
 summary(rf_fit)
@@ -416,7 +414,7 @@ CEC_rf_Pred1 <- predict(rf_fit1, cov_soil_Test)
 
 #### check the plot actual and predicted OC values ###################
 plot(cov_soil_Test$CEC, CEC_rf_Pred, main="Tree model", 
-     col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,100),ylim=c(0,100))
+     col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,60),ylim=c(0,40))
 
 abline(coef = c(0,1),  col="red" )
 
@@ -502,7 +500,7 @@ res_krig_raster <- raster::resample(raster(res_krig), map_rf)
 RK_map <-     res_krig_raster +  map_rf ##evtl. umdrehen!?
 
 # rk performance 
-RK_pred <- extract(RK_map, cov_soil)
+RK_pred <- raster::extract(RK_map, cov_soil)
 
 RMSE_RK <- sqrt(mean((cov_soil$CEC - RK_pred)^2))
 RMSE_RK
