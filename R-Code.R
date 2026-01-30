@@ -16,6 +16,7 @@ library(sf)
 library(caret)
 library(randomForest)
 library (ggplot2)
+library(corrplot)
 
 ########################### DATA PREPROCESSING ###############################
 
@@ -60,15 +61,9 @@ str(cov_soil)
 
 
 ###################### DESCRIPTIVE STATISTICS ############################### 
-#ANNALENA
+######Plots
 
-summary(cov_soil$CEC)
-
-
-############## Histogramme ###########
-
-library(ggplot2)
-
+#Histogram CEC
 ggplot(cov_soil, aes(x = CEC)) +
   geom_histogram(bins = 30, fill = "steelblue", color = "black") +
   theme_minimal() +
@@ -76,13 +71,13 @@ ggplot(cov_soil, aes(x = CEC)) +
        x = "CEC",
        y = "Häufigkeit")
 
+#Boxplot CEC
 ggplot(cov_soil, aes(y = CEC)) +
   geom_boxplot(fill = "orange") +
   theme_minimal() +
   labs(title = "Boxplot der CEC-Werte",
        y = "CEC")
 
-library(tidyr)
 
 cov_long <- pivot_longer(
   cov_soil,
@@ -91,6 +86,7 @@ cov_long <- pivot_longer(
   values_to = "Value"
 )
 
+#Histogram of all Variables
 ggplot(cov_long, aes(x = Value)) +
   geom_histogram(bins = 30, fill = "steelblue", color = "black") +
   facet_wrap(~ Variable, scales = "free") +
@@ -99,6 +95,7 @@ ggplot(cov_long, aes(x = Value)) +
        x = "Wert",
        y = "Häufigkeit")
 
+#Boxplot of all Variables
 ggplot(cov_long, aes(x = Variable, y = Value)) +
   geom_boxplot(fill = "orange") +
   theme_minimal() +
@@ -108,6 +105,7 @@ ggplot(cov_long, aes(x = Variable, y = Value)) +
        y = "Wert")
 
 
+#Smoothed Histograms of all Variables
 ggplot(cov_long, aes(x = Value)) +
   geom_density(fill = "skyblue", alpha = 0.6) +
   facet_wrap(~ Variable, scales = "free") +
@@ -115,25 +113,35 @@ ggplot(cov_long, aes(x = Value)) +
   labs(title = "Dichteverteilungen aller Variablen")
 
 
+#Scatterplots
+ggplot(cov_soil, aes(x = NDVI, y = CEC)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  theme_minimal()
+
+#library(tidyr) ##auskommentiert da library tidyr Probleme im Code macht
+# Daten ins Long-Format bringen, sodass alle Kovariaten in einer Spalte liegen (alle Variablen außer CEC)
+#cov_long <- pivot_longer(
+#  cov_soil,
+#  cols = -CEC,
+#  names_to = "Variable",
+#  values_to = "Value"
+#)
+
+#Scatterplots alle Variablen mit CEC
+#ggplot(cov_long, aes(x = Value, y = CEC)) +
+#  geom_point(alpha = 0.6, size = 1) +
+#  geom_smooth(method = "loess", se = FALSE, color = "red") +
+#  facet_wrap(~ Variable, scales = "free_x") +
+#  theme_minimal() +
+#  labs(
+#    title = "Scatterplots von CEC mit allen Kovariaten",
+#    x = "Kovariate",
+#    y = "CEC"
+#  )
 
 
-
-############# Korrelation #######
-
-cor_matrix <- cor(cov_soil, use = "complete.obs", method = "pearson")
-round(cor_matrix, 2)
-
-library(corrplot)
-
-
-### korr plot volltändig
-corrplot(cor_matrix,
-         method = "color",
-         type = "upper",
-         tl.cex = 0.7,
-         number.cex = 0.6)
-
-### korr plot vollständig verbessert
+############ Correlation #####
 cor_mat <- cor(cov_soil, use = "complete.obs", method = "pearson")
 
 corrplot(
@@ -146,69 +154,6 @@ corrplot(
   addCoef.col = "black",
   number.cex = 0.6
 )
-
-
-
-#korrelation mit standardisierten werten
-cov_soil_scaled <- as.data.frame(scale(cov_soil))
-cor_matrix_scaled <- cor(
-  cov_soil_scaled,
-  use = "complete.obs",
-  method = "pearson"
-)
-
-
-round(cor_matrix_scaled, 2)
-
-
-corrplot(
-  cor_matrix_scaled,
-  method = "color",
-  type = "upper",
-  order = "hclust",
-  tl.col = "black",
-  tl.cex = 0.7,
-  addCoef.col = "black",
-  number.cex = 0.6
-)
-
-
-
-#### Scatterplots ################
-
-
-###scatterplot 
-ggplot(cov_soil, aes(x = NDVI, y = CEC)) +
-  geom_point(alpha = 0.6) +
-  geom_smooth(method = "lm", se = FALSE, color = "red") +
-  theme_minimal()
-
-
-
-library(ggplot2)
-library(tidyr)
-
-# Daten ins Long-Format bringen (alle Variablen außer CEC)
-cov_long <- pivot_longer(
-  cov_soil,
-  cols = -CEC,
-  names_to = "Variable",
-  values_to = "Value"
-)
-
-# Scatterplots: CEC vs jede Variable
-ggplot(cov_long, aes(x = Value, y = CEC)) +
-  geom_point(alpha = 0.6, size = 1) +
-  geom_smooth(method = "loess", se = FALSE, color = "red") +
-  facet_wrap(~ Variable, scales = "free_x") +
-  theme_minimal() +
-  labs(
-    title = "Scatterplots von CEC mit allen Kovariaten",
-    x = "Kovariate",
-    y = "CEC"
-  )
-
-
 
 
 ####################### MODEL ########################################
