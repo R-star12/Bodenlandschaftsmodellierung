@@ -17,6 +17,7 @@ library(caret)
 library(randomForest)
 library (ggplot2)
 library(corrplot)
+library(car)
 
 ########################### DATA PREPROCESSING ###############################
 
@@ -176,12 +177,6 @@ lm_full_45 <- lm(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Gree
 summary(lm_full_45)
 plot(lm_full_45)
 
-# variablen reduzieren
-lm_reduced <- lm(CEC ~ Aspect+Elevation+Green+LS_Factor+NDVI+Rainfall+Slope+Temperature+Wetness_Index,
-              data=cov_soil_45)
-summary(lm_reduced)
-plot(lm_reduced)
-
 
 ########## Unterteilung Test- und Trainingsdaten ##########
 trainIndex <- createDataPartition(cov_soil_45$CEC, p = 0.8, list = FALSE, times = 1)
@@ -193,7 +188,7 @@ cov_soil_Test  <- cov_soil_45[-trainIndex,]
 
 #Finale lineare Regression mit Trainigsdaten
 
-lm_reduced <- lm(CEC ~ Aspect+Elevation+Green+LS_Factor+NDVI+Rainfall+Slope+Temperature+Wetness_Index,
+lm_reduced <- lm(CEC ~ Aspect+Temperature+Green+LS_Factor+NDVI+Rainfall+Slope+Wetness_Index,
                  data=cov_soil_Train)
 summary(lm_reduced)
 
@@ -214,6 +209,9 @@ cor_linear
 # calculate RMSE
 RMSE_linear <- sqrt(mean((cov_soil_Test$CEC - CEC_linear_Pred)^2))
 RMSE_linear
+
+#vif
+vif(lm_reduced)
 
 
 
