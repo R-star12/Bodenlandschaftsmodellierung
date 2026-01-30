@@ -244,12 +244,12 @@ lm_reduced <- lm(
 summary(lm_reduced)
 
 # apply the linear model on testing data
-CEC_linear_Pred <- predict(lm_reduced, cov_soil_scaled)  
+CEC_linear_Pred <- predict(lm_full, cov_soil_scaled)  
 
 # check the plot actual and predicted OC values
 plot(cov_soil_scaled$CEC, CEC_linear_Pred, main="Linear model", 
      col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
-     xlim=c(0,1),ylim=c(0,1))
+     xlim=c(-1,1),ylim=c(-1,1))
 abline(coef = c(0,1),  col="red" )
 
 ## Multikollinearität checken --> VIF über 5 problematisch, über 10 schlecht
