@@ -20,6 +20,7 @@ library (ggplot2)
 ########################### DATA PREPROCESSING ###############################
 
 # Kovariablen laden, benennen (automatische Benennung hat nicht geklappt) & Koordinatensystem zuweisen
+
 covariates_RS <- stack(list.files("./Covariates/", pattern="\\.tif$", full.names = TRUE))
 names(covariates_RS) <- tools::file_path_sans_ext(
   basename(list.files("./Covariates/", pattern="\\.tif$", full.names = FALSE)))
@@ -27,10 +28,13 @@ names(covariates_RS) <- tools::file_path_sans_ext(
 names(covariates_RS)
 covariates_RS  <- projectRaster(covariates_RS, crs = CRS("+init=epsg:4326"))
 
+plot(covariates_RS)
+
+
 # Import der Grenzen des Untersuchungsgebiets
 study_area <- as(st_read("./GIS/boundary.shp"), "Spatial")
 study_area     <- spTransform(study_area, CRS("+init=epsg:4326"))
-plot(study_area, main = "Untersuchungsgebiet")
+
 
 # Import der .csv SOIL Daten & Umwandlung in räumliche Daten (Koordinaten + Koordinatensystem)
 soil_csv <- read.csv("./Soil/soil.csv", header = TRUE)
@@ -38,14 +42,18 @@ coordinates(soil_csv) <- ~ x + y
 proj4string(soil_csv) <- CRS("+init=epsg:4326")
 
 head(soil_csv)
-plot(soil_csv, add =T, pch = 18, col ="red")
 
+png("plots/NDVI_Messpunkte_Boundaries_plot.png", width = 800, height = 600) 
+plot(covariates_RS$NDVI, main = "NDVI")
+plot(study_area, add = T)
+plot(soil_csv, pch = 19, add = T, col ="blue")
+dev.off()
 
 # Extraktion der Kovariaten an den Messpunkten 
 cov = extract(covariates_RS, soil_csv, method='bilinear', df=TRUE)
 
 # Kombination der Kovariate mit der CEC (Zielvariable)
-cov_soil = cbind(cov[,-1], CEC=soil_csv$CEC)
+cov_soil = cbind(cov[,-1], CEC=soil_csv$CEC, Clay = soil_csv$Clay, SOC = soil_csv$SOC, pH = soil_csv$pH)
 
 str(cov_soil)
 
@@ -332,6 +340,9 @@ cor_GAM
 #Random Forest  #EMIL
 
 # split the data to training (80%) and testing (20%) sets
+
+#cov_soil <- cov_soil[cov_soil$CEC<45,] #Test!
+
 trainIndex <- createDataPartition(cov_soil$CEC, p = 0.8, list = FALSE, times = 1)
 
 # subset the datasets
@@ -343,15 +354,39 @@ str(cov_soil_Train)
 str(cov_soil_Test)
 
 # fit random forest model
-rf_fit <- randomForest(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temprature+Valley_Depth+Wetness_Index, 
+
+
+
+rf_fit <- randomForest(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index, 
                        data = cov_soil_Train, ntree = 1000, do.trace = 50) #Cor: 1.7
 
 
-rf_fit <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temprature+LS_Factor+NDVI+NIR+Rainfall+Slope+SWIR1+Wetness_Index, 
+rf_fit <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temperature+LS_Factor+NDVI+NIR+Rainfall+Slope+SWIR1+Wetness_Index, 
                        data = cov_soil_Train, ntree = 10000) #Cor: 2.1
 
-
 summary(rf_fit)
+
+######### Ausprobieren -> SOC modellieren #########
+
+trainIndexX <- createDataPartition(cov_soil$SOC, p = 0.8, list = FALSE, times = 1)
+
+# subset the datasets
+cov_soil_TrainX <- cov_soil[ trainIndex,]
+cov_soil_TestX  <- cov_soil[-trainIndex,]
+
+
+rf_fitX <- randomForest(SOC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index, 
+                       data = cov_soil_TrainX, ntree = 1000, do.trace = 50) #Cor: 0.41
+
+
+importance(rf_fitX)
+varImpPlot(rf_fitX, main = "Variable Importance for RF model")
+
+CEC_rf_PredX <- predict(rf_fitX, cov_soil_TestX)
+
+cor_rfX <- cor(cov_soil_TestX$SOC, CEC_rf_PredX)
+cor_rfX
+###########################
 
 # variable importance
 importance(rf_fit)
@@ -360,7 +395,26 @@ varImpPlot(rf_fit, main = "Variable Importance for RF model")
 CEC_rf_Pred <- predict(rf_fit, cov_soil_Test)
 
 
-# check the plot actual and predicted OC values
+############# Tuning the RF #############
+#wird nur schlechter...
+
+ctrl <- trainControl(method = "cv", number = 10)
+
+rfGrid1 <- expand.grid(.mtry = 6)
+
+set.seed(1234)
+rf_fit1 <- train(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temperature+LS_Factor+NDVI+NIR+Rainfall+Slope+SWIR1+Wetness_Index,
+                 data = cov_soil_Train,
+                 method = "rf",
+                 trControl = ctrl,
+                 tuneGrid = rfGrid1,
+                 ntree = 1000)
+
+rf_fit1$finalModel
+
+CEC_rf_Pred1 <- predict(rf_fit1, cov_soil_Test)
+
+#### check the plot actual and predicted OC values ###################
 plot(cov_soil_Test$CEC, CEC_rf_Pred, main="Tree model", 
      col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,100),ylim=c(0,100))
 
@@ -369,6 +423,7 @@ abline(coef = c(0,1),  col="red" )
 # calculate correlation
 cor_rf <- cor(cov_soil_Test$CEC, CEC_rf_Pred)
 cor_rf
+
 
 # rf performance 
 RMSE_RF <- sqrt(mean((cov_soil_Test$CEC - CEC_rf_Pred)^2))
@@ -386,6 +441,7 @@ map_rf <- raster::predict(covariates_RS, rf_fit)
 # plot the RF map
 spplot(map_rf, main = "CEC map based on RF model")
 
+####################### REGRESSION KRIGING #######################################
 
 # append residuals
 cov_soil$residuals <- cov_soil$CEC - CEC_rf_Pred
@@ -410,7 +466,7 @@ vg_res    <- variogram(gstat_res)
 plot(vg_res, plot.nu = FALSE)
 
 # define initial semivariogram model
-vg_parameters_res <- vgm(nugget = 70, psill = 100, range = 100, model = "Pen")
+vg_parameters_res <- vgm(nugget = 70, psill = 110, range = 100, model = "Pen")
 plot(vg_res, vg_parameters_res)
 
 # fit semivariogram model
@@ -419,8 +475,7 @@ plot(vg_res, vg_model_res)
 vg_model_res
 
 
-# export boundary as a grid (approx. 90 m) 
-res(covariates_RS) 
+# export boundary as a grid  
 r_template <- raster(study_area, res = 0.00898)                 # template raster
 r_mask     <- rasterize(study_area, r_template, field = 1) # inside polygon = 1, outside = NA
 study_area_grid <- as(r_mask, "SpatialPixelsDataFrame")    # grid for kriging
@@ -467,11 +522,6 @@ spplot(RK_map, main = "CEC map based on RK model")
 
 
 ####################### MODELGÜTE #######################################
-
-#CV metrics; RMSE/MAE/R² #CARLA
-
-#Variable Importance #CARLA
-
 
 ### Modellgüte RF #######
 obs <- cov_soilA$CEC
