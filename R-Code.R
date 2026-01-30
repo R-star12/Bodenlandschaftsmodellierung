@@ -1,5 +1,5 @@
 ###############################################################################
-##     Practical exam: DSM - Annalena Bauer, Carla Schenk, Emil Unkrig       ##
+##     Practical exam: DSM - Anna-Lena Bauer, Carla Schenk, Emil Unkrig       ##
 ###############################################################################
 
 # empty workspace
