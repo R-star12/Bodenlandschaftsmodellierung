@@ -210,7 +210,7 @@ cor_linear
 RMSE_linear <- sqrt(mean((cov_soil_Test$CEC - CEC_linear_Pred)^2))
 RMSE_linear
 
-#vif
+#vif (no values over 5, so no multicollinearity)
 vif(lm_reduced)
 
 
