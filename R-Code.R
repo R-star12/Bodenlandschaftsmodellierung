@@ -158,119 +158,67 @@ corrplot(
 
 ####################### MODEL ########################################
 
-#######################Lineare Regression ############## ANNA-LENA
+####################### Lineare Regression ############## 
 
-## einfaches lineares Model
-lm_full <- lm(CEC ~ ., data = cov_soil_scaled)
-lm_full_1 <- lm(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temprature+Valley_Depth+Wetness_Index,
+## Einfaches lineares Model mit allen Variablen
+lm_full <- lm(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index,
                  data=cov_soil)
-summary(lm_full_1)
+
 summary(lm_full)
+plot(lm_full)
+
+# alle CEC Werte über 45 entfernen
+cov_soil_45 <- cov_soil[cov_soil$CEC <= 45, ]
+
+lm_full_45 <- lm(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index,
+              data=cov_soil_45)
+
+summary(lm_full_45)
+plot(lm_full_45)
+
+# variablen reduzieren
+lm_reduced <- lm(CEC ~ Aspect+Elevation+Green+LS_Factor+NDVI+Rainfall+Slope+Temperature+Wetness_Index,
+              data=cov_soil_45)
+summary(lm_reduced)
+plot(lm_reduced)
+
+
+########## Unterteilung Test- und Trainingsdaten ##########
+trainIndex <- createDataPartition(cov_soil_45$CEC, p = 0.8, list = FALSE, times = 1)
+
+# subset the datasets
+cov_soil_Train <- cov_soil_45[ trainIndex,]
+cov_soil_Test  <- cov_soil_45[-trainIndex,]
+
+
+#Finale lineare Regression mit Trainigsdaten
+
+lm_reduced <- lm(CEC ~ Aspect+Elevation+Green+LS_Factor+NDVI+Rainfall+Slope+Temperature+Wetness_Index,
+                 data=cov_soil_Train)
+summary(lm_reduced)
+
 
 # apply the linear model on testing data
-CEC_linear_Pred <- predict(lm_full_1, cov_soil)  
+CEC_linear_Pred <- predict(lm_reduced, cov_soil_Test)  
 
 # check the plot actual and predicted OC values
-plot(cov_soil$CEC, CEC_linear_Pred, main="Linear model", 
+plot(cov_soil_Test$CEC, CEC_linear_Pred, main="Linear Regression Model", 
      col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
-     xlim=c(0,100),ylim=c(0,100))
+     xlim=c(0,45),ylim=c(0,25))
 abline(coef = c(0,1),  col="red" )
 
 # calculate correlation
-cor_linear <- cor(cov_soil$CEC, CEC_linear_Pred)
+cor_linear <- cor(cov_soil_Test$CEC, CEC_linear_Pred)
 cor_linear
 
 # calculate RMSE
-RMSE_linear <- sqrt(mean((cov_soil$CEC - CEC_linear_Pred)^2))
+RMSE_linear <- sqrt(mean((cov_soil_Test$CEC - CEC_linear_Pred)^2))
 RMSE_linear
 
-#calculate MAE
-MAE_linear <- mean(abs(cov_soil$CEC - CEC_linear_Pred))
-MAE_linear
-
-################### reduziertes, einfaches lineare Regression #######
-lm_reduced <- lm(
-  CEC ~ NDVI + Catchment_Area + Slope + LS_Factor + Valley_Depth,
-  data = cov_soil_scaled
-)
-
-summary(lm_reduced)
-
-# apply the linear model on testing data
-CEC_linear_Pred <- predict(lm_full, cov_soil_scaled)  
-
-# check the plot actual and predicted OC values
-plot(cov_soil_scaled$CEC, CEC_linear_Pred, main="Linear model", 
-     col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
-     xlim=c(-1,1),ylim=c(-1,1))
-abline(coef = c(0,1),  col="red" )
-
-## Multikollinearität checken --> VIF über 5 problematisch, über 10 schlecht
-library(car)
-vif(lm_full)
-
-## anhand analyse auszuschließen: Blue, Channel Network, Elevation, green, NDVI, NIR, Red, Slope, SWIR1+2, Temperature
-
-
-##reduzierte Model
-lm_red <- lm(CEC ~ NDVI + Wetness_Index + Elevation, data = cov_soil)
-summary(lm_red)
-
-par(mfrow = c(2, 2))
-plot(lm_red)
-par(mfrow = c(1, 1))
-
-
-##### VIF #######
-predictors <- cov_soil[, -which(names(cov_soil) == "CEC")]
-
-R2_values <- sapply(names(predictors), function(v) {
-  others <- predictors[, names(predictors) != v]
-  summary(lm(predictors[[v]] ~ ., data = others))$r.squared
-})
-
-VIF_like <- 1 / (1 - R2_values)
-sort(VIF_like, decreasing = TRUE)
-
-
-################## GAM - BESSERES MODELL ############################
-
-library(nlme)
-library(mgcv)
-
-gam_cec <- gam(
-  CEC ~ 
-    s(NDVI, k = 6) +
-    s(Catchment_Area, k = 6) +
-    s(Slope, k = 6) +
-    s(LS_Factor, k = 6) +
-    s(Valley_Depth, k = 6),
-  data = cov_soil,
-  method = "REML"
-)
-
-summary(gam_cec)
-
-gam.check(gam_cec)
-
-par(mfrow = c(2, 3))
-plot(gam_cec, shade = TRUE, pages = 1, seWithMean = TRUE)
-par(mfrow = c(1, 1))
-
-CEC_GAM_Pred <- predict(gam_cec, cov_soil)  
-plot(cov_soil$CEC, CEC_GAM_Pred, main="GAM", 
-     col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
-     xlim=c(0,100),ylim=c(0,100))
-abline(coef = c(0,1),  col="red" )
-
-
-<<<<<<< HEAD
 
 
 
-
-
-#Random Forest mit Regression Kriging #EMIL
+############### RANDOM FOREST MIT REGRESSION KRIGING ##########
 =======
 # calculate correlation
 cor_GAM <- cor(cov_soil$CEC, CEC_GAM_Pred)
