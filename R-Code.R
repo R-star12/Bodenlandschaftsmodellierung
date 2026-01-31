@@ -21,45 +21,37 @@ library(car)
 
 ########################### DATA PREPROCESSING ###############################
 
-# Kovariablen laden, benennen (automatische Benennung hat nicht geklappt) & Koordinatensystem zuweisen
+# Kovariablen laden, benennen & Koordinatensystem zuweisen
 
 covariates_RS <- stack(list.files("./Covariates/", pattern="\\.tif$", full.names = TRUE))
-names(covariates_RS) <- tools::file_path_sans_ext(
-  basename(list.files("./Covariates/", pattern="\\.tif$", full.names = FALSE)))
-
-names(covariates_RS)
-covariates_RS  <- projectRaster(covariates_RS, crs = CRS("+init=epsg:4326"))
+names(covariates_RS) <- tools::file_path_sans_ext(basename(list.files("./Covariates/", pattern="\\.tif$", full.names = FALSE)))
+covariates_RS  <- projectRaster(covariates_RS, crs = CRS("EPSG:4326"))
 
 plot(covariates_RS)
 
-
-# Import der Grenzen des Untersuchungsgebiets
+# Import des Untersuchungsgebiets & Zuweisung Koordinatensystem
 study_area <- as(st_read("./GIS/boundary.shp"), "Spatial")
-study_area     <- spTransform(study_area, CRS("+init=epsg:4326"))
+study_area <- spTransform(study_area, CRS("EPSG:4326"))
 
-
-# Import der .csv SOIL Daten & Umwandlung in räumliche Daten (Koordinaten + Koordinatensystem)
+# Import der Bodendaten & Georeferenzierung
 soil_csv <- read.csv("./Soil/soil.csv", header = TRUE)
 coordinates(soil_csv) <- ~ x + y
-proj4string(soil_csv) <- CRS("+init=epsg:4326")
+proj4string(soil_csv) <- CRS("EPSG:4326")
 
 head(soil_csv)
 
-png("plots/NDVI_Messpunkte_Boundaries_plot.png", width = 800, height = 600) 
-plot(covariates_RS$NDVI, main = "NDVI")
-plot(study_area, add = T)
-plot(soil_csv, pch = 19, add = T, col ="blue")
-dev.off()
-
-# Extraktion der Kovariaten an den Messpunkten 
+# Extraktion der Kovariaten an den Messpunkten & Erstellung eines DF mit Kovariaten + Zielvariable
 cov = raster::extract(covariates_RS, soil_csv, method='bilinear', df=TRUE)
-
-# Kombination der Kovariate mit der CEC (Zielvariable)
-cov_soil = cbind(cov[,-1], CEC=soil_csv$CEC, Clay = soil_csv$Clay, SOC = soil_csv$SOC, pH = soil_csv$pH)
+cov_soil = cbind(cov[,-1], CEC=soil_csv$CEC)
 
 str(cov_soil)
 
-
+# Plot der NDVI-Kovariate mit Messpunkten & Grenzen des Untersuchungsgebiets
+png("plots/NDVI_Messpunkte_Boundaries_plot.png", width = 800, height = 600) 
+plot(covariates_RS$NDVI, main = "NDVI")
+plot(study_area, add = T)
+plot(soil_csv, pch = 1, add = T, col ="blue")
+dev.off()
 
 ###################### DESCRIPTIVE STATISTICS ############################### 
 ######Plots
@@ -79,13 +71,8 @@ ggplot(cov_soil, aes(y = CEC)) +
   labs(title = "Boxplot der CEC-Werte",
        y = "CEC")
 
-
-cov_long <- pivot_longer(
-  cov_soil,
-  cols = everything(),
-  names_to = "Variable",
-  values_to = "Value"
-)
+# Daten ins Long-Format bringen, sodass alle Kovariaten in einer Spalte liegen
+cov_long <- tidyr::pivot_longer(cov_soil, cols = everything(), names_to = "Variable", values_to = "Value")
 
 #Histogram of all Variables
 ggplot(cov_long, aes(x = Value)) +
@@ -105,7 +92,6 @@ ggplot(cov_long, aes(x = Variable, y = Value)) +
        x = "",
        y = "Wert")
 
-
 #Smoothed Histograms of all Variables
 ggplot(cov_long, aes(x = Value)) +
   geom_density(fill = "skyblue", alpha = 0.6) +
@@ -120,26 +106,19 @@ ggplot(cov_soil, aes(x = NDVI, y = CEC)) +
   geom_smooth(method = "lm", se = FALSE, color = "red") +
   theme_minimal()
 
-#library(tidyr) ##auskommentiert da library tidyr Probleme im Code macht
 # Daten ins Long-Format bringen, sodass alle Kovariaten in einer Spalte liegen (alle Variablen außer CEC)
-#cov_long <- pivot_longer(
-#  cov_soil,
-#  cols = -CEC,
-#  names_to = "Variable",
-#  values_to = "Value"
-#)
+cov_longB <- tidyr::pivot_longer(cov_soil, cols = -CEC, names_to = "Variable", values_to = "Value")
 
 #Scatterplots alle Variablen mit CEC
-#ggplot(cov_long, aes(x = Value, y = CEC)) +
-#  geom_point(alpha = 0.6, size = 1) +
-#  geom_smooth(method = "loess", se = FALSE, color = "red") +
-#  facet_wrap(~ Variable, scales = "free_x") +
-#  theme_minimal() +
-#  labs(
-#    title = "Scatterplots von CEC mit allen Kovariaten",
-#    x = "Kovariate",
-#    y = "CEC"
-#  )
+ggplot(cov_longB, aes(x = Value, y = CEC)) +
+  geom_point(alpha = 0.6, size = 1) +
+  geom_smooth(method = "loess", se = FALSE, color = "red") +
+  facet_wrap(~ Variable, scales = "free_x") +
+  theme_minimal() +
+  labs(
+    title = "Scatterplots von CEC mit allen Kovariaten",
+    x = "Kovariate",
+    y = "CEC")
 
 
 ############ Correlation #####
@@ -153,8 +132,7 @@ corrplot(
   tl.col = "black",
   tl.cex = 0.7,
   addCoef.col = "black",
-  number.cex = 0.6
-)
+  number.cex = 0.6)
 
 
 ####################### MODEL ########################################
@@ -178,7 +156,7 @@ summary(lm_full_45)
 plot(lm_full_45)
 
 
-########## Unterteilung Test- und Trainingsdaten ##########
+#Unterteilung Test- und Trainingsdaten 
 trainIndex <- createDataPartition(cov_soil_45$CEC, p = 0.8, list = FALSE, times = 1)
 
 # subset the datasets
@@ -186,12 +164,11 @@ cov_soil_Train <- cov_soil_45[ trainIndex,]
 cov_soil_Test  <- cov_soil_45[-trainIndex,]
 
 
-#Finale lineare Regression mit Trainigsdaten
+#Finale lineare Regression mit Trainingsdaten 
 
-lm_reduced <- lm(CEC ~ Aspect+Temperature+Green+LS_Factor+NDVI+Rainfall+Slope+Wetness_Index,
+lm_reduced <- lm(CEC ~ Aspect+Temperature+LS_Factor+NDVI+Rainfall+Green+Slope+Wetness_Index,
                  data=cov_soil_Train)
 summary(lm_reduced)
-
 
 # apply the linear model on testing data
 CEC_linear_Pred <- predict(lm_reduced, cov_soil_Test)  
@@ -199,7 +176,7 @@ CEC_linear_Pred <- predict(lm_reduced, cov_soil_Test)
 # check the plot actual and predicted OC values
 plot(cov_soil_Test$CEC, CEC_linear_Pred, main="Linear Regression Model", 
      col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
-     xlim=c(0,45),ylim=c(0,25))
+     xlim=c(0,45),ylim=c(0,35))
 abline(coef = c(0,1),  col="red" )
 
 # calculate correlation
@@ -210,33 +187,20 @@ cor_linear
 RMSE_linear <- sqrt(mean((cov_soil_Test$CEC - CEC_linear_Pred)^2))
 RMSE_linear
 
+#calculate R2
+R2_linear <- 1 - sum((cov_soil_Test$CEC - CEC_linear_Pred)^2)/sum((cov_soil_Test$CEC - mean(cov_soil_Test$CEC))^2)
+R2_linear
+
 #vif (no values over 5, so no multicollinearity)
 vif(lm_reduced)
 
 
-
-
 ############### RANDOM FOREST MIT REGRESSION KRIGING ##########
-=======
-# calculate correlation
-cor_GAM <- cor(cov_soil$CEC, CEC_GAM_Pred)
-cor_GAM
->>>>>>> 0a76d071157e8e2762e88e3132a0aafff97d154c
 
-
-
-
-############################### Random Forest ###########################
-
-#Random Forest  #EMIL
+#cov_soil_70 <- cov_soil[cov_soil$CEC<70,]
 
 # split the data to training (80%) and testing (20%) sets
-
-#cov_soil <- cov_soil[cov_soil$CEC<45,] #Test!
-
 trainIndex <- createDataPartition(cov_soil$CEC, p = 0.8, list = FALSE, times = 1)
-
-# subset the datasets
 cov_soil_Train <- cov_soil[ trainIndex,]
 cov_soil_Test  <- cov_soil[-trainIndex,]
 
@@ -244,45 +208,25 @@ cov_soil_Test  <- cov_soil[-trainIndex,]
 str(cov_soil_Train)
 str(cov_soil_Test)
 
+############################### Random Forest ###########################
+
 # fit random forest model
 
-rf_fit <- randomForest(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index, 
-                       data = cov_soil_Train, ntree = 1000, do.trace = 50) #Cor: 1.7
+rf_full <- randomForest(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index, 
+                       data = cov_soil_Train, ntree = 5000, do.trace = 500) #Cor: 1.7
 
 
 rf_fit <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temperature+LS_Factor+NDVI+Rainfall+Slope+SWIR1+Wetness_Index, 
                        data = cov_soil_Train, ntree = 10000) #Cor: 2.1
 
-summary(rf_fit)
+summary(rf_full)
 
-######### Ausprobieren -> SOC modellieren #########
-
-trainIndexX <- createDataPartition(cov_soil$SOC, p = 0.8, list = FALSE, times = 1)
-
-# subset the datasets
-cov_soil_TrainX <- cov_soil[ trainIndex,]
-cov_soil_TestX  <- cov_soil[-trainIndex,]
-
-
-rf_fitX <- randomForest(SOC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index, 
-                       data = cov_soil_TrainX, ntree = 1000, do.trace = 50) #Cor: 0.41
-
-
-importance(rf_fitX)
-varImpPlot(rf_fitX, main = "Variable Importance for RF model")
-
-CEC_rf_PredX <- predict(rf_fitX, cov_soil_TestX)
-
-cor_rfX <- cor(cov_soil_TestX$SOC, CEC_rf_PredX)
-cor_rfX
-###########################
 
 # variable importance
-importance(rf_fit)
-varImpPlot(rf_fit, main = "Variable Importance for RF model")
+importance(rf_full)
+varImpPlot(rf_full, main = "Variable Importance for RF model")
 
-CEC_rf_Pred <- predict(rf_fit, cov_soil_Test)
-
+CEC_rf_full_Pred <- predict(rf_full, cov_soil_Test)
 
 ############# Tuning the RF #############
 #wird nur schlechter...
@@ -304,31 +248,26 @@ rf_fit1$finalModel
 CEC_rf_Pred1 <- predict(rf_fit1, cov_soil_Test)
 
 #### check the plot actual and predicted OC values ###################
-plot(cov_soil_Test$CEC, CEC_rf_Pred, main="Tree model", 
-     col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,60),ylim=c(0,40))
+plot(cov_soil_Test$CEC, CEC_rf_full_Pred, main="RF model", 
+     col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,100),ylim=c(0,40))
 
 abline(coef = c(0,1),  col="red" )
 
-# calculate correlation
-cor_rf <- cor(cov_soil_Test$CEC, CEC_rf_Pred)
+# calculate rf correlation & performance
+cor_rf <- cor(cov_soil_Test$CEC, CEC_rf_full_Pred)
 cor_rf
-
-
-# rf performance 
-RMSE_RF <- sqrt(mean((cov_soil_Test$CEC - CEC_rf_Pred)^2))
-RMSE_RF
-
-MAE_RF <- mean(abs(cov_soil_Test$CEC - CEC_rf_Pred))
-MAE_RF
-
-R2_RF <- 1 - sum((cov_soil_Test$CEC - CEC_rf_Pred)^2)/sum((cov_soil_Test$CEC - mean(cov_soil_Test$CEC))^2)
-R2_RF
+RMSE_rf <- sqrt(mean((cov_soil_Test$CEC - CEC_rf_full_Pred)^2))
+MAE_rf <- mean(abs(cov_soil_Test$CEC - CEC_rf_full_Pred))
+R2_rf <- 1 - sum((cov_soil_Test$CEC - CEC_rf_full_Pred)^2)/sum((cov_soil_Test$CEC - mean(cov_soil_Test$CEC))^2)
 
 # random forest prediction part 
-map_rf <- raster::predict(covariates_RS, rf_fit)
+map_rf <- raster::predict(covariates_RS, rf_full)
 
 # plot the RF map
 spplot(map_rf, main = "CEC map based on RF model")
+
+
+
 
 ####################### REGRESSION KRIGING #######################################
 
@@ -383,8 +322,6 @@ res_krig <- krige(
 spplot(res_krig, zcol = "var1.pred", main = "residuals predictions")
 
 
-
-
 # obtain regression kriging prediction
 res_krig_raster <- raster::resample(raster(res_krig), map_rf)
 
@@ -407,8 +344,18 @@ spplot(map_rf, main = "CEC map based on RF model")
 spplot(RK_map, main = "CEC map based on RK model")
 
 
+######### Comparing the Results ###############
 
+RMSE_models <- c(Linear=RMSE_linear, RF=RMSE_rf)
+cor_models <- c(Linear=cor_linear, RF=cor_rf)
+R2_models <- c(Linear=R2_linear, RF=R2_rf)
 
+par(mfrow = c(1,3))
+barplot(RMSE_models, main="RMSE",col=c("red","blue","green"))
+barplot(cor_models, main="Correlation",col=c("red","blue","green"))
+barplot(R2_models, main="R2",col=c("red","blue","green"))
+
+par(mfrow = c(1,1))
 
 ####################### MODELGÜTE #######################################
 
