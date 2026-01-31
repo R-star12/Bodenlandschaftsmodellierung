@@ -135,7 +135,6 @@ corrplot(
   number.cex = 0.6)
 
 
-####################### MODEL ########################################
 
 ####################### Lineare Regression ############## 
 
@@ -160,35 +159,39 @@ plot(lm_full_45)
 trainIndex <- createDataPartition(cov_soil_45$CEC, p = 0.8, list = FALSE, times = 1)
 
 # subset the datasets
-cov_soil_Train <- cov_soil_45[ trainIndex,]
-cov_soil_Test  <- cov_soil_45[-trainIndex,]
+cov_soil_Train_45 <- cov_soil_45[ trainIndex,]
+cov_soil_Test_45  <- cov_soil_45[-trainIndex,]
 
 
 #Finale lineare Regression mit Trainingsdaten 
 
 lm_reduced <- lm(CEC ~ Aspect+Temperature+LS_Factor+NDVI+Rainfall+Green+Slope+Wetness_Index,
-                 data=cov_soil_Train)
+                 data=cov_soil_Train_45)
 summary(lm_reduced)
 
 # apply the linear model on testing data
-CEC_linear_Pred <- predict(lm_reduced, cov_soil_Test)  
+CEC_linear_Pred <- predict(lm_reduced, cov_soil_Test_45)  
 
 # check the plot actual and predicted OC values
-plot(cov_soil_Test$CEC, CEC_linear_Pred, main="Linear Regression Model", 
+plot(cov_soil_Test_45$CEC, CEC_linear_Pred, main="Linear Regression Model", 
      col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
      xlim=c(0,45),ylim=c(0,35))
 abline(coef = c(0,1),  col="red" )
 
+
+map_lin <- raster::predict(covariates_RS, lm_full_45)
+
+
 # calculate correlation
-cor_linear <- cor(cov_soil_Test$CEC, CEC_linear_Pred)
+cor_linear <- cor(cov_soil_Test_45$CEC, CEC_linear_Pred)
 cor_linear
 
 # calculate RMSE
-RMSE_linear <- sqrt(mean((cov_soil_Test$CEC - CEC_linear_Pred)^2))
+RMSE_linear <- sqrt(mean((cov_soil_Test_45$CEC - CEC_linear_Pred)^2))
 RMSE_linear
 
 #calculate R2
-R2_linear <- 1 - sum((cov_soil_Test$CEC - CEC_linear_Pred)^2)/sum((cov_soil_Test$CEC - mean(cov_soil_Test$CEC))^2)
+R2_linear <- 1 - sum((cov_soil_Test_45$CEC - CEC_linear_Pred)^2)/sum((cov_soil_Test_45$CEC - mean(cov_soil_Test_45$CEC))^2)
 R2_linear
 
 #vif (no values over 5, so no multicollinearity)
@@ -216,7 +219,7 @@ rf_full <- randomForest(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevati
                        data = cov_soil_Train, ntree = 5000, do.trace = 500) #Cor: 1.7
 
 
-rf_fit <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temperature+LS_Factor+NDVI+Rainfall+Slope+SWIR1+Wetness_Index, 
+rf_reduced <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temperature+LS_Factor+NDVI+Rainfall+Slope+SWIR1+Wetness_Index, 
                        data = cov_soil_Train, ntree = 10000) #Cor: 2.1
 
 summary(rf_full)
@@ -247,9 +250,9 @@ rf_fit1$finalModel
 
 CEC_rf_Pred1 <- predict(rf_fit1, cov_soil_Test)
 
-#### check the plot actual and predicted OC values ###################
+#### check the plot actual and predicted OC values #################
 plot(cov_soil_Test$CEC, CEC_rf_full_Pred, main="RF model", 
-     col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,100),ylim=c(0,40))
+     col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,100),ylim=c(0,100))
 
 abline(coef = c(0,1),  col="red" )
 
@@ -257,6 +260,7 @@ abline(coef = c(0,1),  col="red" )
 cor_rf <- cor(cov_soil_Test$CEC, CEC_rf_full_Pred)
 cor_rf
 RMSE_rf <- sqrt(mean((cov_soil_Test$CEC - CEC_rf_full_Pred)^2))
+RMSE_rf
 MAE_rf <- mean(abs(cov_soil_Test$CEC - CEC_rf_full_Pred))
 R2_rf <- 1 - sum((cov_soil_Test$CEC - CEC_rf_full_Pred)^2)/sum((cov_soil_Test$CEC - mean(cov_soil_Test$CEC))^2)
 
@@ -267,29 +271,30 @@ map_rf <- raster::predict(covariates_RS, rf_full)
 spplot(map_rf, main = "CEC map based on RF model")
 
 
-
-
 ####################### REGRESSION KRIGING #######################################
 
 # append residuals
-cov_soil$residuals <- cov_soil$CEC - CEC_rf_Pred
-names(cov_soil)
-summary(cov_soil)
+cov_soil_RK <- cov_soil
+cov_soil_RK$residuals <- cov_soil_RK$CEC - rf_full$predicted #CEC_rf_full_Pred
+names(cov_soil_RK)
+summary(cov_soil_RK)
 
 # histogram of the residuals 
-hist(cov_soil$residuals, col = "lightblue")
+hist(cov_soil_RK$residuals, col = "lightblue")
 
 # convert cov_soil to spatial data
-cov_soil$x <- soil_csv$x
-cov_soil$y <- soil_csv$y
-coordinates(cov_soil) <- ~ x + y
-proj4string(cov_soil) <- CRS("+init=epsg:4326")
+
+
+cov_soil_RK$x <- soil_csv$x
+cov_soil_RK$y <- soil_csv$y
+coordinates(cov_soil_RK) <- ~ x + y
+proj4string(cov_soil_RK) <- CRS("EPSG:4326")
 
 # compute experimental semivariogram of residuals
 #install.packages(gstat)
 library(gstat)
 
-gstat_res <- gstat(formula = residuals ~ 1, data = cov_soil)
+gstat_res <- gstat(formula = residuals ~ 1, data = cov_soil_RK)
 vg_res    <- variogram(gstat_res)
 plot(vg_res, plot.nu = FALSE)
 
@@ -312,7 +317,7 @@ study_area_grid <- as(r_mask, "SpatialPixelsDataFrame")    # grid for kriging
 # ordinary kriging of residuals
 res_krig <- krige(
   formula   = residuals ~ 1,
-  locations = cov_soil,
+  locations = cov_soil_RK,
   newdata   = study_area_grid,
   model     = vg_model_res
 )
@@ -328,7 +333,7 @@ res_krig_raster <- raster::resample(raster(res_krig), map_rf)
 RK_map <-     res_krig_raster +  map_rf ##evtl. umdrehen!?
 
 # rk performance 
-RK_pred <- raster::extract(RK_map, cov_soil)
+RK_pred <- raster::extract(RK_map, cov_soil_RK)
 
 RMSE_RK <- sqrt(mean((cov_soil$CEC - RK_pred)^2))
 RMSE_RK
@@ -339,16 +344,23 @@ MAE_RK
 R2_RK <- 1 - sum((cov_soil$CEC - RK_pred)^2) / sum((cov_soil$CEC - mean(cov_soil$CEC))^2)
 R2_RK
 
-# plot the RK map
+# plot the maps
+par(mfrow = c(3,1))
+spplot(map_lin, main = "CEC map based on Linear model")
 spplot(map_rf, main = "CEC map based on RF model")
 spplot(RK_map, main = "CEC map based on RK model")
 
+#library(gridExtra)
+#p1 <- spplot(map_lin, main = "CEC: Linear Model", col.regions = viridis::viridis(100))
+#p2 <- spplot(map_rf, main = "CEC: Random Forest", col.regions = viridis::viridis(100))
+#p3 <- spplot(RK_map, main = "CEC: Regression Kriging", col.regions = viridis::viridis(100))
+#grid.arrange(p1, p2, p3, ncol = 1, nrow = 3)
 
 ######### Comparing the Results ###############
 
-RMSE_models <- c(Linear=RMSE_linear, RF=RMSE_rf)
+RMSE_models <- c(Linear=RMSE_linear, RF=RMSE_rf) #, RK=RMSE_RK)
 cor_models <- c(Linear=cor_linear, RF=cor_rf)
-R2_models <- c(Linear=R2_linear, RF=R2_rf)
+R2_models <- c(Linear=R2_linear, RF=R2_rf) #, RK=R2_RK)
 
 par(mfrow = c(1,3))
 barplot(RMSE_models, main="RMSE",col=c("red","blue","green"))
@@ -357,23 +369,28 @@ barplot(R2_models, main="R2",col=c("red","blue","green"))
 
 par(mfrow = c(1,1))
 
-####################### MODELGÜTE #######################################
+# nochmal in hübscher!
+models_df <- data.frame(RMSE = RMSE_models, Correlation = cor_models, R2 = R2_models, Model = names(RMSE_models))
 
-### Modellgüte RF #######
-obs <- cov_soilA$CEC
-pred_rf <- rf_fit$predicted
+models_long <- models_df %>% tidyr::pivot_longer(cols = c(RMSE, Correlation, R2), names_to = "Metric", values_to = "Value")
 
-RMSE_rf <- sqrt(mean((obs - pred_rf)^2))
-MAE_rf  <- mean(abs(obs - pred_rf))
-R2_rf   <- cor(obs, pred_rf)^2
+ggplot(models_long, aes(x = Model, y = Value, fill = Model)) +
+  geom_col(alpha = 0.8, color = "black", linewidth = 0.3) +
+  geom_text(aes(label = round(Value, 3)), 
+            vjust = -0.3, hjust = 0.5,      
+            color = "black", fontface = "bold", size = 3.5) +
+  facet_wrap(~ Metric, scales = "free_y", ncol = 3) +
+  scale_fill_manual(values = c("darkgreen", "darkblue")) +
+  labs(title = "Modellvergleich: RMSE, Korrelation, R²",
+       x = "Modelle", y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-RMSE_rf
-MAE_rf
-R2_rf
 
-####### Modellgute RK #######
 
-##residuen an punktstandorten
+####### Modellgute RK ####### 
+
+#??? weiß nicht genau was das macht
 
 install.packages("gstat")
 library(gstat)
