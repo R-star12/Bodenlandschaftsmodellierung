@@ -53,7 +53,9 @@ plot(study_area, add = T)
 plot(soil_csv, pch = 1, add = T, col ="blue")
 dev.off()
 
-###################### DESCRIPTIVE STATISTICS ############################### 
+
+
+####cov_soil###################### DESCRIPTIVE STATISTICS ############################### 
 ######Plots
 
 #Histogram CEC
@@ -134,6 +136,19 @@ corrplot(
   addCoef.col = "black",
   number.cex = 0.6)
 
+cov_soil_unab <- cov_soil[ , -which(names(cov_soil) %in% c("NIR", "SWIR1", "Channel_Network","Green", "Red", "Blue", "Temperature", "SWIR2", "Valley_Depth"))]
+
+cor_mat <- cor(cov_soil_unab, use = "complete.obs", method = "pearson")
+
+corrplot(
+  cor_mat,
+  method = "color",
+  type = "upper",
+  order = "hclust",
+  tl.col = "black",
+  tl.cex = 0.7,
+  addCoef.col = "black",
+  number.cex = 0.6)
 
 
 ####################### Lineare Regression ############## 
@@ -207,57 +222,61 @@ trainIndex <- createDataPartition(cov_soil$CEC, p = 0.8, list = FALSE, times = 1
 cov_soil_Train <- cov_soil[ trainIndex,]
 cov_soil_Test  <- cov_soil[-trainIndex,]
 
-# inspect the two datasets
-str(cov_soil_Train)
-str(cov_soil_Test)
-
 ############################### Random Forest ###########################
 
 # fit random forest model
 
 rf_full <- randomForest(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Green+LS_Factor+NDVI+NIR+Rainfall+Red+Slope+SWIR1+SWIR2+Temperature+Valley_Depth+Wetness_Index, 
-                       data = cov_soil_Train, ntree = 5000, do.trace = 500) #Cor: 1.7
-
-
-rf_reduced <- randomForest(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temperature+LS_Factor+NDVI+Rainfall+Slope+SWIR1+Wetness_Index, 
-                       data = cov_soil_Train, ntree = 10000) #Cor: 2.1
-
-summary(rf_full)
+                       data = cov_soil_Train_45, ntree = 5000, do.trace = 500) 
 
 
 # variable importance
 importance(rf_full)
 varImpPlot(rf_full, main = "Variable Importance for RF model")
 
-CEC_rf_full_Pred <- predict(rf_full, cov_soil_Test)
+CEC_rf_full_Pred <- predict(rf_full, cov_soil_Test_45)
 
-############# Tuning the RF #############
-#wird nur schlechter...
 
-ctrl <- trainControl(method = "cv", number = 10)
+#### reduced model####
+trainIndexA <- createDataPartition(cov_soil_unab$CEC, p = 0.8, list = FALSE, times = 1)
+cov_soil_TrainA <- cov_soil_unab[ trainIndexA,]
+cov_soil_TestA  <- cov_soil_unab[-trainIndexA,]
 
-rfGrid1 <- expand.grid(.mtry = 6)
+rf_red <- randomForest(CEC ~ ., data = cov_soil_TrainA, ntree = 10000) #
 
-set.seed(1234)
-rf_fit1 <- train(CEC ~ Aspect+Catchment_Area+Channel_Network+Elevation+Green+Temperature+LS_Factor+NDVI+NIR+Rainfall+Slope+SWIR1+Wetness_Index,
-                 data = cov_soil_Train,
-                 method = "rf",
-                 trControl = ctrl,
-                 tuneGrid = rfGrid1,
-                 ntree = 1000)
+summary(rf_red)
 
-rf_fit1$finalModel
+# variable importance
+importance(rf_red)
+varImpPlot(rf_red, main = "Variable Importance for reduced RF model")
 
-CEC_rf_Pred1 <- predict(rf_fit1, cov_soil_Test)
+CEC_rf_red_Pred <- predict(rf_red, cov_soil_TestA)
 
-#### check the plot actual and predicted OC values #################
-plot(cov_soil_Test$CEC, CEC_rf_full_Pred, main="RF model", 
+# check the plot actual and predicted OC values 
+plot(cov_soil_TestA$CEC, CEC_rf_red_Pred, main="Reduced RF model", 
      col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,100),ylim=c(0,100))
 
 abline(coef = c(0,1),  col="red" )
 
 # calculate rf correlation & performance
-cor_rf <- cor(cov_soil_Test$CEC, CEC_rf_full_Pred)
+cor_rf_red <- cor(cov_soil_TestA$CEC, CEC_rf_red_Pred)
+cor_rf_red
+
+# random forest prediction part 
+map_rf_red <- raster::predict(covariates_RS, rf_red)
+
+# plot the RF map
+spplot(map_rf_red, main = "CEC map based on reduced RF model")
+
+
+#### check the plot actual and predicted OC values #################
+plot(cov_soil_Test_45$CEC, CEC_rf_full_Pred, main="RF model", 
+     col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,100),ylim=c(0,100))
+
+abline(coef = c(0,1),  col="red" )
+
+# calculate rf correlation & performance
+cor_rf <- cor(cov_soil_Test_45$CEC, CEC_rf_full_Pred)
 cor_rf
 RMSE_rf <- sqrt(mean((cov_soil_Test$CEC - CEC_rf_full_Pred)^2))
 RMSE_rf
