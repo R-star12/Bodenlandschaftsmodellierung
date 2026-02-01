@@ -180,7 +180,7 @@ cov_soil_Test_45  <- cov_soil_45[-trainIndex,]
 
 #Finale lineare Regression mit Trainingsdaten 
 
-lm_reduced <- lm(CEC ~ Aspect+Temperature+LS_Factor+NDVI+Rainfall+Green+Slope+Wetness_Index,
+lm_reduced <- lm(CEC ~ Aspect+Temperature+LS_Factor+NDVI+Rainfall+Slope+Wetness_Index,
                  data=cov_soil_Train_45)
 summary(lm_reduced)
 
@@ -195,7 +195,6 @@ abline(coef = c(0,1),  col="red" )
 
 
 map_lin <- raster::predict(covariates_RS, lm_full_45)
-
 
 # calculate correlation
 cor_linear <- cor(cov_soil_Test_45$CEC, CEC_linear_Pred)
@@ -364,16 +363,76 @@ R2_RK <- 1 - sum((cov_soil$CEC - RK_pred)^2) / sum((cov_soil$CEC - mean(cov_soil
 R2_RK
 
 # plot the maps
-par(mfrow = c(3,1))
+par(mfrow = c(2,2))
 spplot(map_lin, main = "CEC map based on Linear model")
 spplot(map_rf, main = "CEC map based on RF model")
 spplot(RK_map, main = "CEC map based on RK model")
+ssplot(OK_map, main= "CEC map based on OK")
+
 
 #library(gridExtra)
 #p1 <- spplot(map_lin, main = "CEC: Linear Model", col.regions = viridis::viridis(100))
 #p2 <- spplot(map_rf, main = "CEC: Random Forest", col.regions = viridis::viridis(100))
 #p3 <- spplot(RK_map, main = "CEC: Regression Kriging", col.regions = viridis::viridis(100))
 #grid.arrange(p1, p2, p3, ncol = 1, nrow = 3)
+
+
+
+################ Ordinary Kriging ####################
+
+cov_soil_OK <- cov_soil
+
+cov_soil_OK$x <- soil_csv$x
+cov_soil_OK$y <- soil_csv$y
+coordinates(cov_soil_OK) <- ~ x + y
+proj4string(cov_soil_OK) <- CRS("EPSG:4326")
+
+gstat_OK <- gstat(formula = CEC ~ 1, data = cov_soil_OK)
+vg_OK    <- variogram(gstat_OK)
+
+plot(vg_OK, plot.nu = FALSE)
+
+####Variogramm: Which model? Pen or SPH?
+vg_init_OK <- vgm(
+  nugget = 70,
+  psill  = 110,
+  range  = 100,
+  model  = "Sph"
+)
+
+vg_model_OK <- fit.variogram(vg_OK, vg_init_OK)
+plot(vg_OK, vg_model_OK)
+vg_model_OK
+
+#Grid 
+r_template <- raster(study_area, res = 0.00898)
+r_mask     <- rasterize(study_area, r_template, field = 1)
+study_area_grid <- as(r_mask, "SpatialPixelsDataFrame")
+
+#Ordinary Kriging von CEC
+CEC_OK <- krige(
+  formula   = CEC ~ 1,
+  locations = cov_soil_OK,
+  newdata   = study_area_grid,
+  model     = vg_model_OK
+)
+
+#map
+OK_map <- spplot(CEC_OK, zcol = "var1.pred", main = "CEC – Ordinary Kriging")
+OK_map
+
+#modellgüte
+CEC_OK_pred <- raster::extract(raster(CEC_OK), cov_soil_OK)
+
+RMSE_OK <- sqrt(mean((cov_soil$CEC - CEC_OK_pred)^2))
+MAE_OK  <- mean(abs(cov_soil$CEC - CEC_OK_pred))
+R2_OK   <- 1 - sum((cov_soil$CEC - CEC_OK_pred)^2) /
+  sum((cov_soil$CEC - mean(cov_soil$CEC))^2)
+
+RMSE_OK
+MAE_OK
+R2_OK
+
 
 ######### Comparing the Results ###############
 
