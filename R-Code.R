@@ -152,7 +152,7 @@ corrplot(
   number.cex = 0.6)
 
 
-<<<<<<< HEAD
+
 
 ############### RANDOM FOREST MIT REGRESSION KRIGING ##########
 
@@ -163,8 +163,7 @@ trainIndex <- createDataPartition(cov_soil$CEC, p = 0.8, list = FALSE, times = 1
 cov_soil_Train <- cov_soil[ trainIndex,]
 cov_soil_Test  <- cov_soil[-trainIndex,]
 
-=======
->>>>>>> 1cd80d1e7b24b8c2b0084a4945eabf2fae69f428
+
 ############################### Random Forest ###########################
 
 trainIndex <- createDataPartition(cov_soil_unab$CEC, p = 0.8, list = FALSE, times = 1)
@@ -261,6 +260,75 @@ MAE_RK <- mean(abs(cov_soil$CEC - RK_pred))
 R2_RK <- 1 - sum((cov_soil$CEC - RK_pred)^2) / sum((cov_soil$CEC - mean(cov_soil$CEC))^2)
 R2_RK
 
+
+############ NEU: Regression Kriging #############
+
+
+### Residuen nur im TRAIN
+cov_soil_RK_train <- cov_soil_Train
+cov_soil_RK_train$residuals <- cov_soil_RK_train$CEC - CEC_rf_train
+
+### Spatial
+cov_soil_RK_train$x <- soil_csv$x[trainIndex]
+cov_soil_RK_train$y <- soil_csv$y[trainIndex]
+coordinates(cov_soil_RK_train) <- ~ x + y
+proj4string(cov_soil_RK_train) <- CRS("EPSG:4326")
+
+## Variogramm der Residuen
+vg_res <- variogram(residuals ~ 1, cov_soil_RK_train)
+vg_mod <- fit.variogram(vg_res, vgm("Sph"))
+
+# histogram of the residuals 
+#hist(cov_soil_RK$residuals, col = "lightblue")
+
+###RK-Prediction für TEST
+cov_soil_Test$x <- soil_csv$x[-trainIndex]
+cov_soil_Test$y <- soil_csv$y[-trainIndex]
+coordinates(cov_soil_Test) <- ~ x + y
+proj4string(cov_soil_Test) <- CRS("EPSG:4326")
+
+res_krig_test <- krige(
+  residuals ~ 1,
+  locations = cov_soil_RK_train,
+  newdata   = cov_soil_Test,
+  model     = vg_mod
+)
+
+### Endgültige RK-Vorhersage
+CEC_rf_test <- predict(rf, cov_soil_Test)
+CEC_RK_pred <- CEC_rf_test + res_krig_test$var1.pred
+
+### Modellgüte RK
+RMSE_RK <- sqrt(mean((cov_soil_Test$CEC - CEC_RK_pred)^2))
+RMSE_RK
+MAE_RK  <- mean(abs(cov_soil_Test$CEC - CEC_RK_pred))
+MAE_RK
+R2_RK   <- 1 - sum((cov_soil_Test$CEC - CEC_RK_pred)^2) /
+  sum((cov_soil_Test$CEC - mean(cov_soil_Test$CEC))^2)
+R2_RK
+
+
+####karte erstellen
+vg_res_full <- variogram(residuals ~ 1, cov_soil_RK)
+vg_res_full <- fit.variogram(vg_res_full, vgm("Sph"))
+res_krig_map <- krige(
+  residuals ~ 1,
+  locations = cov_soil_RK,
+  newdata   = study_area_grid,
+  model     = vg_res_full
+)
+
+RK_map <- map_rf + raster(res_krig_map)
+
+spplot(RK_map, main = "CEC – Regression Kriging")
+
+
+
+
+
+
+
+
 # plot the maps
 par(mfrow = c(2,2))
 spplot(map_lin, main = "CEC map based on Linear model")
@@ -281,53 +349,73 @@ cov_soil_OK <- cov_soil_unab
 
 cov_soil_OK$x <- soil_csv$x
 cov_soil_OK$y <- soil_csv$y
+
 coordinates(cov_soil_OK) <- ~ x + y
 proj4string(cov_soil_OK) <- CRS("EPSG:4326")
 
 gstat_OK <- gstat(formula = CEC ~ 1, data = cov_soil_OK)
-vg_OK    <- variogram(gstat_OK)
 
-plot(vg_OK, plot.nu = FALSE)
+vg_OK <- variogram(gstat_OK)
+
+plot(vg_OK, plot.nu = FALSE,
+     main = "Empirisches Variogramm von CEC")
 
 ####Variogramm: Which model? Pen or SPH?
 vg_init_OK <- vgm(
   nugget = 70,
   psill  = 110,
   range  = 100,
-  model  = "Sph")
+  model  = "Sph"
+)
 
 vg_model_OK <- fit.variogram(vg_OK, vg_init_OK)
-plot(vg_OK, vg_model_OK)
+
+plot(vg_OK, vg_model_OK,
+     main = "Gefittetes Variogramm")
 vg_model_OK
 
-#Grid 
-r_template <- raster(study_area, res = 0.00898)
-r_mask     <- rasterize(study_area, r_template, field = 1)
-study_area_grid <- as(r_mask, "SpatialPixelsDataFrame")
-
-#Ordinary Kriging von CEC
-CEC_OK <- krige(
-  formula   = CEC ~ 1,
+###leave one out cross validation
+cv_OK <- krige.cv(
+  CEC ~ 1,
   locations = cov_soil_OK,
-  newdata   = study_area_grid,
-  model     = vg_model_OK)
+  model     = vg_model_OK,
+  nfold     = nrow(cov_soil_OK)   # LOOCV
+)
 
-CEC_OK
+##modellgüte
+res_OK <- cv_OK$residual
 
-#map
-OK_map <- spplot(CEC_OK, zcol = "var1.pred", main = "CEC – Ordinary Kriging")
-OK_map
-
-#modellgüte
-CEC_OK_pred <- raster::extract(raster(CEC_OK), cov_soil_OK)
-
-RMSE_OK <- sqrt(mean((cov_soil$CEC - CEC_OK_pred)^2))
-MAE_OK  <- mean(abs(cov_soil$CEC - CEC_OK_pred))
-R2_OK   <- 1 - sum((cov_soil$CEC - CEC_OK_pred)^2) / sum((cov_soil$CEC - mean(cov_soil$CEC))^2)
+RMSE_OK <- sqrt(mean(res_OK^2))
+MAE_OK  <- mean(abs(res_OK))
+R2_OK   <- 1 - sum(res_OK^2) /
+  sum((cov_soil_OK$CEC - mean(cov_soil_OK$CEC))^2)
 
 RMSE_OK
 MAE_OK
 R2_OK
+
+#####Karte
+#Grid
+r_template <- raster(study_area, res = 0.00898)
+r_mask     <- rasterize(study_area, r_template, field = 1)
+study_area_grid <- as(r_mask, "SpatialPixelsDataFrame")
+
+##OK
+CEC_OK_map <- krige(
+  formula   = CEC ~ 1,
+  locations = cov_soil_OK,
+  newdata   = study_area_grid,
+  model     = vg_model_OK
+)
+
+#plot
+spplot(
+  CEC_OK_map,
+  zcol = "var1.pred",
+  main = "CEC – Ordinary Kriging"
+)
+
+
 
 
 ######### Comparing the Results ###############
@@ -359,3 +447,5 @@ ggplot(models_long, aes(x = Model, y = Value, fill = Model)) +
        x = "Modelle", y = NULL) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
