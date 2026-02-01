@@ -344,10 +344,11 @@ R2_RK <- 1 - sum((cov_soil$CEC - RK_pred)^2) / sum((cov_soil$CEC - mean(cov_soil
 R2_RK
 
 # plot the maps
-par(mfrow = c(3,1))
+par(mfrow = c(2,2))
 spplot(map_lin, main = "CEC map based on Linear model")
 spplot(map_rf, main = "CEC map based on RF model")
 spplot(RK_map, main = "CEC map based on RK model")
+ssplot(OK_map, main= "CEC map based on OK")
 
 
 #library(gridExtra)
@@ -398,7 +399,8 @@ CEC_OK <- krige(
 )
 
 #map
-spplot(CEC_OK, zcol = "var1.pred", main = "CEC – Ordinary Kriging")
+OK_map <- spplot(CEC_OK, zcol = "var1.pred", main = "CEC – Ordinary Kriging")
+OK_map
 
 #modellgüte
 CEC_OK_pred <- raster::extract(raster(CEC_OK), cov_soil_OK)
