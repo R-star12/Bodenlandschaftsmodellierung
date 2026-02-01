@@ -169,7 +169,7 @@ lm_full_45 <- lm(CEC ~ Aspect+Blue+Catchment_Area+Channel_Network+Elevation+Gree
 summary(lm_full_45)
 plot(lm_full_45)
 
-
+###### LM ohne werte über 45
 #Unterteilung Test- und Trainingsdaten 
 trainIndex <- createDataPartition(cov_soil_45$CEC, p = 0.8, list = FALSE, times = 1)
 
@@ -188,7 +188,7 @@ summary(lm_reduced)
 CEC_linear_Pred <- predict(lm_reduced, cov_soil_Test_45)  
 
 # check the plot actual and predicted OC values
-plot(cov_soil_Test_45$CEC, CEC_linear_Pred, main="Linear Regression Model", 
+plot(cov_soil_Test_45$CEC, CEC_linear_Pred, main="Linear Regression Model values below 45", 
      col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
      xlim=c(0,45),ylim=c(0,45))
 abline(coef = c(0,1),  col="red" )
@@ -210,6 +210,40 @@ R2_linear
 
 #vif (no values over 5, so no multicollinearity)
 vif(lm_reduced)
+
+
+###### LM mit werte über 45
+#Unterteilung Test- und Trainingsdaten 
+trainIndex_new <- createDataPartition(cov_soil$CEC, p = 0.8, list = FALSE, times = 1)
+
+# subset the datasets
+cov_soil_Train_new <- cov_soil[ trainIndex,]
+cov_soil_Test_new  <- cov_soil[-trainIndex,]
+
+lm_reduced_new <- lm(CEC ~ Aspect+Temperature+LS_Factor+NDVI+Rainfall+Slope+Wetness_Index,
+                 data=cov_soil_Train_new)
+summary(lm_reduced_new)
+
+# apply the linear model on testing data
+CEC_linear_Pred <- predict(lm_reduced_new, cov_soil_Test_new)  
+
+# check the plot actual and predicted OC values
+plot(cov_soil_Test_new$CEC, CEC_linear_Pred, main="Linear Regression Model all Values", 
+     col="blue",xlab="Actual CEC", ylab="Predicted CEC", 
+     xlim=c(0,45),ylim=c(0,35))
+abline(coef = c(0,1),  col="red" )
+
+# calculate correlation
+cor_linear <- cor(cov_soil_Test_new$CEC, CEC_linear_Pred)
+cor_linear
+
+# calculate RMSE
+RMSE_linear <- sqrt(mean((cov_soil_Test_new$CEC - CEC_linear_Pred)^2))
+RMSE_linear
+
+#calculate R2
+R2_linear <- 1 - sum((cov_soil_Test_new$CEC - CEC_linear_Pred)^2)/sum((cov_soil_Test_new$CEC - mean(cov_soil_Test_new$CEC))^2)
+R2_linear
 
 
 ############### RANDOM FOREST MIT REGRESSION KRIGING ##########
