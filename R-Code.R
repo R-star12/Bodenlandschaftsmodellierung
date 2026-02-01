@@ -18,6 +18,7 @@ library(randomForest)
 library (ggplot2)
 library(corrplot)
 library(car)
+library(gstat)
 
 ########################### DATA PREPROCESSING ###############################
 
@@ -151,47 +152,47 @@ corrplot(
   number.cex = 0.6)
 
 
-############### RANDOM FOREST MIT REGRESSION KRIGING ##########
-
 ############################### Random Forest ###########################
 
 trainIndex <- createDataPartition(cov_soil_unab$CEC, p = 0.8, list = FALSE, times = 1)
 cov_soil_Train <- cov_soil_unab[ trainIndex,]
 cov_soil_Test  <- cov_soil_unab[-trainIndex,]
 
-rf_red <- randomForest(CEC ~ ., data = cov_soil_Train, ntree = 10000) 
-summary(rf_red)
+rf <- randomForest(CEC ~ ., data = cov_soil_Train, ntree = 10000) 
+summary(rf)
 
-importance(rf_red)  # variable importance
-varImpPlot(rf_red, main = "Variable Importance for RF model")
+importance(rf)  # variable importance
+varImpPlot(rf, main = "Variable Importance for RF model")
 
-CEC_rf_red_Pred <- predict(rf_red, cov_soil_Test)
+CEC_rf_Pred <- predict(rf, cov_soil_Test)
 
 # check the plot actual and predicted OC values 
-plot(cov_soil_Test$CEC, CEC_rf_red_Pred, main="RF model", 
+plot(cov_soil_Test$CEC, CEC_rf_Pred, main="RF model", 
      col="blue",xlab="Actual CEC", ylab="Predicted CEC", xlim=c(0,100),ylim=c(0,100))
 
 abline(coef = c(0,1),  col="red" )
 
-cor_rf_red <- cor(cov_soil_Test$CEC, CEC_rf_red_Pred)  # calculate rf correlation & performance
-cor_rf_red
+cor_rf <- cor(cov_soil_Test$CEC, CEC_rf_Pred)  # calculate rf correlation & performance
+cor_rf
 
 # random forest prediction part 
-map_rf_red <- raster::predict(covariates_RS, rf_red)
+map_rf <- raster::predict(covariates_RS, rf)
 
 # plot the RF map
-spplot(map_rf_red, main = "CEC map based on RF model")
+spplot(map_rf, main = "CEC map based on RF model")
 
-RMSE_rf <- sqrt(mean((cov_soil_Test$CEC - CEC_rf_full_Pred)^2))
-MAE_rf <- mean(abs(cov_soil_Test$CEC - CEC_rf_full_Pred))
-R2_rf <- 1 - sum((cov_soil_Test$CEC - CEC_rf_full_Pred)^2)/sum((cov_soil_Test$CEC - mean(cov_soil_Test$CEC))^2)
-
+RMSE_rf <- sqrt(mean((cov_soil_Test$CEC - CEC_rf_Pred)^2))
+MAE_rf <- mean(abs(cov_soil_Test$CEC - CEC_rf_Pred))
+R2_rf <- 1 - sum((cov_soil_Test$CEC - CEC_rf_Pred)^2)/sum((cov_soil_Test$CEC - mean(cov_soil_Test$CEC))^2)
 
 ####################### REGRESSION KRIGING #######################################
 
+# Hier müsste man entscheiden ob man alle Werte oder nur den Train/ Test Datensatz nutzt!
+CEC_rf_Pred <- predict(rf, cov_soil_unab)
+
 # append residuals
 cov_soil_RK <- cov_soil_unab
-cov_soil_RK$residuals <- cov_soil_RK$CEC - rf_red$predicted #CEC_rf_full_Pred
+cov_soil_RK$residuals <- cov_soil_RK$CEC - CEC_rf_Pred 
 names(cov_soil_RK)
 summary(cov_soil_RK)
 
@@ -206,9 +207,6 @@ coordinates(cov_soil_RK) <- ~ x + y
 proj4string(cov_soil_RK) <- CRS("EPSG:4326")
 
 # compute experimental semivariogram of residuals
-#install.packages(gstat)
-library(gstat)
-
 gstat_res <- gstat(formula = residuals ~ 1, data = cov_soil_RK)
 vg_res    <- variogram(gstat_res)
 plot(vg_res, plot.nu = FALSE)
@@ -240,7 +238,7 @@ spplot(res_krig, zcol = "var1.pred", main = "residuals predictions")
 # obtain regression kriging prediction
 res_krig_raster <- raster::resample(raster(res_krig), map_rf)
 
-RK_map <-     res_krig_raster +  map_rf_red ##evtl. umdrehen!?
+RK_map <-     res_krig_raster +  map_rf 
 
 # rk performance 
 RK_pred <- raster::extract(RK_map, cov_soil_RK)
