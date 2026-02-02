@@ -436,15 +436,16 @@ mapview::mapview(RK_map)
 mapview::mapview(map_rf)
 
 
-############ Alte plots
+
 # plot the maps
-par(mfrow = c(2,2))
-spplot(map_lin, main = "CEC map based on Linear model")
-spplot(map_rf_red, main = "CEC map based on RF model")
+#spplot(map_lin, main = "CEC map based on Linear model")
+spplot(map_rf, main = "CEC map based on RF model")
 spplot(RK_map, main = "CEC map based on RK model")
-ssplot(OK_map, main= "CEC map based on OK")
+spplot(map_OK, main= "CEC map based on OK")
 
 
+
+############ Alte plots
 #library(gridExtra)
 #p1 <- spplot(map_lin, main = "CEC: Linear Model", col.regions = viridis::viridis(100))
 #p2 <- spplot(map_rf, main = "CEC: Random Forest", col.regions = viridis::viridis(100))
