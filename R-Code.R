@@ -156,7 +156,7 @@ corrplot(
 
 ############### Applying different Models ##########
 
-set.seed(123) ##Optional, so wird der Trainingssplit jedes mal gleich geteilt --> Bessere Vergleichbarkeit
+#set.seed(123) ##Optional, so wird der Trainingssplit jedes mal gleich geteilt --> Bessere Vergleichbarkeit
 
 # 80/20 Split (einmal, für alle Modelle)
 trainIndex <- createDataPartition(cov_soil_unab$CEC, p = 0.8, list = FALSE)
@@ -417,7 +417,6 @@ metrics
 
 
 ### Variogramme vergleichen
-
 #RK
 plot(vg_res, vg_mod, main="Fitted Variogramm RK")
 vg_mod
@@ -427,6 +426,14 @@ plot(vg_OK, vg_model_OK,
      main = "Fitted Variogramm OK")
 vg_model_OK
 
+
+##final soil map
+install.packages("mapview")
+install.packages("sf")
+library(mapview)
+library(sf)
+mapview::mapview(RK_map)
+mapview::mapview(map_rf)
 
 
 ############ Alte plots
