@@ -185,7 +185,7 @@ cor_rf <- cor(cov_soil_Test$CEC, CEC_rf_Pred)  # calculate rf correlation & perf
 cor_rf
 
 # random forest prediction part 
-#map_rf <- raster::predict(covariates_RS, rf)
+map_rf <- raster::predict(covariates_RS, rf)
 
 # plot the RF map
 spplot(map_rf, main = "CEC map based on RF model")
@@ -435,13 +435,69 @@ library(sf)
 mapview::mapview(RK_map)
 mapview::mapview(map_rf)
 
-
-
-# plot the maps
+#maps without background
 #spplot(map_lin, main = "CEC map based on Linear model")
 spplot(map_rf, main = "CEC map based on RF model")
 spplot(RK_map, main = "CEC map based on RK model")
 spplot(map_OK, main= "CEC map based on OK")
+
+
+
+############## Uncertainty Assessment ############
+install.packages("viridis")
+library(viridis)
+#standard deviation for OK
+CEC_OK_map$SD <- sqrt(CEC_OK_map$var1.var)
+#plot
+spplot(CEC_OK_map, 
+       zcol = "SD", 
+       main = "Standard Deviation Ordinary Kriging", 
+       col.regions = viridis::viridis(100),
+       at = seq(min(CEC_OK_map$SD, na.rm=T), max(CEC_OK_map$SD, na.rm=T), length.out = 100))
+
+#### RK Uncertainity
+# res_krig_map enthält die Varianz der Residuen
+# umwandlung in raster
+RK_uncertainty <- raster(res_krig_map, layer = "var1.var",)
+RK_SD <- sqrt(RK_uncertainty)
+
+# Plot
+plot(RK_SD, main = "Standard Deviation Regression Kriging Residuals", col = viridis::viridis(100))
+
+####### läuft bei mir nicht weil zu wenig arbeitsspeicher
+## RF Uncertainty
+#Namen der Variablen aus dem Trainings-Datensatz holen
+#'CEC' entfernen, da zielvariable
+rf_vars <- colnames(cov_soil_Train)[colnames(cov_soil_Train) != "CEC"]
+
+#Werte aus dem Raster-Stack extrahieren
+grid_values <- raster::extract(covariates_RS, study_area_grid)
+grid_df <- as.data.frame(grid_values)
+
+#Sicherstellen, dass nur die Variablen im Grid sind, die im Training waren 
+#in der exakt gleichen Schreibweise und Auswahl
+prediction_data <- grid_df[, rf_vars, drop = FALSE]
+
+# Vorhersage der einzelnen Bäume
+# complete.cases, um NAs (Ränder des Gebiets) auszuschließen
+complete_cases <- complete.cases(prediction_data)
+
+# Vorhersage für alle 10.000 Bäume
+rf_all_trees <- predict(rf, prediction_data[complete_cases, ], predict.all = TRUE)
+
+#Standardabweichung (Unsicherheit) berechnen
+study_area_grid$RF_SD <- NA
+study_area_grid$RF_SD[complete_cases] <- apply(rf_all_trees$individual, 1, sd)
+
+#In Raster umwandeln und Plotten
+RF_uncertainty_map <- raster(study_area_grid, layer = "RF_SD")
+
+# Visualisierung
+plot(RF_uncertainty_map, 
+     main = "RF Uncertainty (Standard Deviation)", 
+     col = viridis::viridis(100))
+
+
 
 
 
