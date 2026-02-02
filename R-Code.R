@@ -45,11 +45,11 @@ head(soil_csv)
 cov = raster::extract(covariates_RS, soil_csv, method='bilinear', df=TRUE)
 cov_soil = cbind(cov[,-1], CEC=soil_csv$CEC)
 
-str(cov_soil)
+summary(cov_soil$CEC)
 
 # Plot der NDVI-Kovariate mit Messpunkten & Grenzen des Untersuchungsgebiets
 png("plots/NDVI_Messpunkte_Boundaries_plot.png", width = 800, height = 600) 
-plot(covariates_RS$NDVI, main = "NDVI")
+plot(covariates_RS$NDVI, main = "NDVI with Soil Sampling Points and Study Area Boundary")
 plot(study_area, add = T)
 plot(soil_csv, pch = 1, add = T, col ="blue")
 dev.off()
@@ -63,15 +63,15 @@ dev.off()
 ggplot(cov_soil, aes(x = CEC)) +
   geom_histogram(bins = 30, fill = "steelblue", color = "black") +
   theme_minimal() +
-  labs(title = "Histogramm der CEC-Werte",
+  labs(title = "Histogram showing the distribution of CEC values",
        x = "CEC",
-       y = "Häufigkeit")
+       y = "Frequency")
 
 #Boxplot CEC
 ggplot(cov_soil, aes(y = CEC)) +
   geom_boxplot(fill = "orange") +
   theme_minimal() +
-  labs(title = "Boxplot der CEC-Werte",
+  labs(title = "Boxplot showing the distribution of CEC values",
        y = "CEC")
 
 # Daten ins Long-Format bringen, sodass alle Kovariaten in einer Spalte liegen
@@ -82,9 +82,12 @@ ggplot(cov_long, aes(x = Value)) +
   geom_histogram(bins = 30, fill = "steelblue", color = "black") +
   facet_wrap(~ Variable, scales = "free") +
   theme_minimal() +
-  labs(title = "Verteilung aller Variablen",
-       x = "Wert",
-       y = "Häufigkeit")
+  labs(title = "Histograms of all covariates",
+       x = "Value",
+       y = "Frequency")
+
+
+plot(soil_csv)
 
 #Boxplot of all Variables
 ggplot(cov_long, aes(x = Variable, y = Value)) +
@@ -214,7 +217,6 @@ proj4string(cov_soil_RK_train) <- CRS("EPSG:4326")
 vg_res <- variogram(residuals ~ 1, cov_soil_RK_train)
 vg_mod <- fit.variogram(vg_res, vgm("Sph"))
 plot(vg_res, vg_mod)
-
 
 # histogram of the residuals 
 #hist(cov_soil_RK$residuals, col = "lightblue")
@@ -538,3 +540,33 @@ ggplot(models_long, aes(x = Model, y = Value, fill = Model)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 
+library(sf)
+library(ggplot2)
+library(viridis)
+
+# 1) Konvertierung zu sf (funktioniert definitiv mit deinen Objekten)
+study_area_sf <- st_as_sf(study_area)
+soil_sf <- st_as_sf(soil_csv)
+
+ggplot() +
+  geom_sf(data = study_area_sf, 
+          fill = "grey", 
+          color = "black", 
+          alpha = 0.4) +
+  
+    geom_sf(data = soil_sf, 
+          aes(size = CEC),           
+          shape = 21,           # Kreis mit Füllung + Rand
+          fill = "darkgreen",     # Innere Farbe
+          color = "black",      # Weißer Rand
+          stroke = 1,         # Randdicke (wichtiger Parameter!)
+          alpha = 0.8) +    
+  
+  scale_size_continuous(name = "CEC-Value", 
+                        range = c(1, 8),     
+                        breaks = pretty(soil_csv$CEC)) +
+    coord_sf(expand = FALSE) +
+  labs(title = "Cation Exchange Capacity (CEC) in Study Area",
+       size = "CEC") +
+  theme_minimal() +
+  theme(legend.position = "right")
